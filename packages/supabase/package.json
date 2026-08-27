@@ -1,0 +1,11 @@
+{
+  "name": "@ricamo/supabase",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/client.ts",
+  "types": "src/client.ts",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "@supabase/ssr": "^0.5.1"
+  }
+}

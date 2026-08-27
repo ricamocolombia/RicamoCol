@@ -1,0 +1,33 @@
+# Dependencies
+node_modules
+
+# Next.js
+.next
+next-env.d.ts
+
+# Turborepo
+.turbo
+
+# Vercel
+.vercel
+
+# Build output
+dist
+
+# Env files (nunca commitear secretos)
+.env
+.env.local
+.env.*.local
+
+# Supabase CLI local
+.supabase
+supabase/.temp
+
+# Estado local de Obsidian (layout de ventanas, tabs abiertos) - no es
+# contenido del vault, es preferencia de cada máquina
+vault/**/.obsidian
+
+# Logs / OS
+*.log
+.DS_Store
+Thumbs.db

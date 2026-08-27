@@ -1,0 +1,26 @@
+# Configuracion del proyecto Supabase para desarrollo local (Supabase CLI).
+# Ejecutar `supabase login` y `supabase link --project-ref <ref>` para
+# conectar este proyecto al proyecto real en supabase.com antes de aplicar
+# migraciones (`supabase db push`).
+
+project_id = "ricamo"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3001"]
