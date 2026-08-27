@@ -64,6 +64,8 @@ Registro completo con fechas y motivos en [`vault/Ricamo/00 Contexto/Decisiones.
 
 - **Código**: GitHub (monorepo) — [`ricamocolombia/RicamoCol`](https://github.com/ricamocolombia/RicamoCol), rama `main`. Primer commit ya empujado (2026-08-27).
 - **Base de datos / Auth / Storage**: Supabase (Postgres) — proyecto real conectado vía `.env.local` en ambas apps (no versionado). Esquema en [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql), **ya aplicado** al proyecto real (pegado a mano en el SQL Editor del Dashboard el 2026-08-27; el CLI `supabase link` sigue sin poder usarse porque falta un personal access token o la contraseña de la base de datos). `apps/admin` ya usa Supabase Auth para el login — ver sección 6.
+  - **⚠️ [`supabase/migrations/0002_grants.sql`](./supabase/migrations/0002_grants.sql) todavía NO está aplicada.** Sin ella, ningún rol (ni siquiera `service_role`) puede leer/escribir ninguna tabla — Postgres exige `GRANT` de tabla además de RLS, y `0001_init.sql` nunca lo otorgó. Mientras esto no se aplique, todo el módulo admin (sección 6) está sin verificar en vivo. Ver [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Ricamo/02%20Pendientes/Backlog.md).
+  - `packages/supabase/src/types.ts` ya NO es un placeholder: tiene el `Database` completo escrito a mano a partir del `.sql` (2026-08-27), sin `as any`/`as never` en el código del admin. Si en algún momento se consigue el access token de Supabase, se puede regenerar con `supabase gen types typescript` y comparar contra este archivo.
 - **Despliegue**: Vercel — dos proyectos de Vercel apuntando al mismo repo (`apps/web` y `apps/admin` como root directory de cada uno), o un solo proyecto con dos apps si se prefiere; pendiente de definir al momento de conectar Vercel.
 - **Email transaccional**: Resend (confirmación de pedidos, alertas de cuentas por pagar próximas a vencer, etc.).
 - **Frontend**: Next.js 15 (App Router) + TypeScript + Tailwind CSS en ambas apps.
@@ -144,6 +146,7 @@ Diseño aprobado por el cliente → `orders.status` pasa a `en_produccion` → s
 
 Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Ricamo/02%20Pendientes/Backlog.md). Los bloqueos más importantes que dependen del usuario:
 
+- **Aplicar `supabase/migrations/0002_grants.sql`** en el SQL Editor del Dashboard de Supabase — sin esto el módulo admin no se puede probar en vivo (ver sección 4).
 - Confirmar si el WhatsApp del negocio para la web es 3216245987 (+57), visto en el Instagram.
 - Elegir pasarela de pago para Colombia (candidatas naturales: Wompi, MercadoPago, PayU).
 - Dominio del sitio.
@@ -155,7 +158,7 @@ Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Rica
 
 1. **Fundación** (hecho el 2026-08-27): estructura del monorepo, esquema de base de datos inicial, `CLAUDE.md`, memoria del proyecto en Obsidian.
 2. **Conexión de infraestructura** (hecho el 2026-08-27, falta Resend): proyecto real en Supabase conectado y con la migración aplicada, repo en GitHub con el primer push, `pnpm install`/`pnpm build` verificados en local.
-3. **App admin — núcleo operativo** (en progreso): autenticación con Supabase Auth ✅ (2026-08-27), falta el CRUD real de ventas/compras/inventario/cuentas por cobrar y pagar/bancos/proveedores/domiciliarios (hoy son placeholders).
+3. **App admin — núcleo operativo** (construido el 2026-08-27, pendiente de verificar en vivo): autenticación con Supabase Auth, y los 9 módulos (ventas, compras, inventario, cuentas por cobrar y pagar, bancos, proveedores, domiciliarios, diseños) con listado real + alta conectados a Supabase — construidos con 4 agentes en paralelo, uno por área de negocio. Falta: aplicar `0002_grants.sql` para poder probarlo en vivo, editar/eliminar registros existentes, y un módulo de clientes dedicado (hoy Ventas lo resuelve inline). Detalle completo en `vault/Ricamo/01 Progreso/2026-08-27.md` y en el backlog.
 4. **Ecommerce — catálogo y marca personal**: catálogo real conectado a Supabase, página de Maria Jose, identidad visual definitiva (logo).
 5. **Integración**: registro automático de ventas web → admin, publicación de diseños admin → ecommerce, checkout con pasarela de pagos para el catálogo.
 6. **Pulido**: notificaciones por email (confirmaciones, alertas de cartera), SEO, despliegue final en Vercel con dominio propio.
@@ -176,8 +179,10 @@ Ver `apps/web/.env.example` y `apps/admin/.env.example` para el detalle completo
 
 ## 12. Notas para Claude Code en este repo
 
-- Este proyecto está en sus primeras horas de vida: hay estructura y esquema, pero casi ninguna pantalla tiene lógica real todavía (son placeholders marcados con `TODO`). Antes de "arreglar" algo, confirmar si es un placeholder intencional documentado aquí o un bug real.
+- El ecommerce (`apps/web`) sigue siendo casi todo placeholders con `TODO`. El admin (`apps/admin`) ya tiene los 9 módulos con lógica real (ver sección 9) — no asumas que todavía es solo scaffold ahí. Antes de "arreglar" algo, confirmar si es un placeholder intencional documentado aquí o un bug real.
 - `pnpm install` y `pnpm build` ya se verificaron (2026-08-27) — ambas apps compilan. Si algo no compila después de un cambio, es una regresión real, no un problema preexistente del scaffold.
 - Git está inicializado, con `origin` en GitHub (`ricamocolombia/RicamoCol`) y el primer commit ya empujado a `main` (2026-08-27). No commitear ni hacer push sin que el usuario lo pida explícitamente en esa sesión — es una instrucción general del entorno, no específica de este proyecto, pero aplica con fuerza aquí porque el remoto ya es real.
 - Los archivos `.env.local` de ambas apps tienen credenciales reales de Supabase (incluida la `service_role` key). Nunca imprimirlas en la bóveda de Obsidian, en `CLAUDE.md` ni en ningún archivo que se vaya a commitear — viven solo en `.env.local` (gitignored).
+- **Si toca dividir trabajo en agentes en paralelo dentro de este repo** (como se hizo el 2026-08-27 para el módulo admin): asignar carpetas disjuntas a cada agente, prohibirles tocar `package.json`/`layout.tsx`/`middleware.ts`/archivos compartidos, prohibirles `pnpm install` y builds completos (chocan entre sí), prohibirles git — y hacer la integración (typecheck completo, remover workarounds de tipos, build final, commit) tú mismo al final, no delegarla.
+- Un permission denied (`42501`) de Postgres al leer/escribir cualquier tabla nueva casi siempre significa que faltó el `GRANT` correspondiente, no que RLS esté mal — ver `0002_grants.sql` y su `ALTER DEFAULT PRIVILEGES`, que ya cubre las tablas futuras si se sigue aplicando cada migración en orden.
 - Sigue el proceso de la sección 0 (leer/escribir en la bóveda de Obsidian) en cada sesión para que el contexto no se pierda entre conversaciones.

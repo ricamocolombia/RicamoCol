@@ -31,3 +31,9 @@ vault/**/.obsidian
 *.log
 .DS_Store
 Thumbs.db
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Estado local de Claude Code (tareas programadas, etc.)
+.claude/
