@@ -8,14 +8,14 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [ ] Elegir pasarela de pago para Colombia (Wompi / MercadoPago / PayU).
 - [ ] Dominio del sitio.
 - [x] Proyecto de Supabase creado (2026-08-27): `https://jeebrphbdcuhfkyhicmq.supabase.co`. URL + anon key + service role key guardadas en `apps/web/.env.local` y `apps/admin/.env.local` (nunca en la bóveda ni en git). Falta crear el proyecto de Resend.
-- [x] Repo remoto de GitHub confirmado: `https://github.com/ricamocolombia/RicamoCol.git`, bajo la organización/cuenta `ricamocolombia`. Se configuró como `origin` localmente (2026-08-27) — todavía no se ha hecho el primer commit ni push (pendiente de que el usuario lo confirme explícitamente).
+- [x] Repo remoto de GitHub confirmado y con el primer push hecho (2026-08-27): `https://github.com/ricamocolombia/RicamoCol.git`, rama `main` trackeando `origin/main`. Se autenticó con un Personal Access Token del usuario, usado una sola vez en el comando de push (nunca guardado en el remoto ni en ningún archivo).
 - [ ] Contenido de marca personal de Maria Jose (bio, redes, fotos, historia) más allá de lo público en Instagram.
 - [ ] Personal access token de Supabase (desde supabase.com/dashboard/account/tokens) o la contraseña de la base de datos, para poder aplicar la migración por CLI sin intervención manual — `supabase link` falló con "Unauthorized" sin esto.
 
 ## Backend / datos
 - [x] `pnpm install` ejecutado y `pnpm build` verificado en ambas apps (2026-08-27) — compilan sin errores con las credenciales reales de Supabase.
-- [ ] Aplicar la migración `supabase/migrations/0001_init.sql` al proyecto real. Opción rápida sin credenciales adicionales: pegarla directamente en el SQL Editor del Dashboard de Supabase. Opción por CLI: `supabase link --project-ref jeebrphbdcuhfkyhicmq` seguido de `supabase db push`, requiere el access token de arriba.
-- [ ] Generar tipos TypeScript reales desde Supabase (reemplazar `packages/supabase/src/types.ts`) una vez la migración esté aplicada.
+- [x] Migración `supabase/migrations/0001_init.sql` aplicada al proyecto real (2026-08-27) — el usuario la pegó directamente en el SQL Editor del Dashboard de Supabase.
+- [ ] Generar tipos TypeScript reales desde Supabase (reemplazar `packages/supabase/src/types.ts`) — requiere el access token de Supabase de arriba, o se puede escribir a mano a partir del `.sql` mientras tanto.
 - [ ] Definir políticas RLS finales (hoy solo hay lectura pública de `products`/`designs` publicados).
 
 ## Ecommerce (apps/web)
@@ -33,7 +33,8 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [ ] CRUD de bancos + registro de movimientos (ingresos/salidas).
 - [ ] CRUD de proveedores y domiciliarios.
 - [ ] Módulo de diseños con botón "Publicar en ecommerce".
-- [ ] Autenticación (login) para la app admin vía Supabase Auth.
+- [x] Autenticación (login) para la app admin vía Supabase Auth (2026-08-27) — middleware protege todas las rutas, `/login` con email+password, logout en el dashboard. Primera cuenta creada (`juancamilo965@gmail.com`) con `pnpm create-admin-user <email> <password>` (usa la service_role key, sin flujo de auto-registro).
+- [ ] Gestión de usuarios del panel (invitar/desactivar cuentas de Maria Jose y su equipo) — hoy solo existe el script de CLI, no una pantalla.
 
 ## Integración
 - [ ] Webhook/Server Action que registre automáticamente en `orders` cada venta hecha desde el ecommerce.
@@ -43,4 +44,4 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 ## Infraestructura
 - [ ] Conectar repo a Vercel (dos proyectos: web y admin, o un proyecto con dos apps).
 - [ ] Variables de entorno en Vercel (Supabase, Resend, pasarela de pago, WhatsApp) — mismos valores que en los `.env.local`.
-- [ ] Primer commit + push a GitHub (remoto ya configurado, falta confirmación explícita del usuario para commitear).
+- [x] Primer commit + push a GitHub hecho (2026-08-27).

@@ -62,8 +62,8 @@ Registro completo con fechas y motivos en [`vault/Ricamo/00 Contexto/Decisiones.
 
 ## 4. Arquitectura técnica
 
-- **Código**: GitHub (monorepo) — [`ricamocolombia/RicamoCol`](https://github.com/ricamocolombia/RicamoCol), configurado como `origin` local. Todavía sin primer commit/push (requiere confirmación explícita, ver sección 12).
-- **Base de datos / Auth / Storage**: Supabase (Postgres) — proyecto real conectado vía `.env.local` en ambas apps (no versionado). Esquema en [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql), **todavía no aplicado** al proyecto real: falta un personal access token de Supabase o la contraseña de la base de datos para hacerlo por CLI (`supabase link` ya falló por "Unauthorized" sin eso); alternativa rápida es pegar el `.sql` directamente en el SQL Editor del Dashboard.
+- **Código**: GitHub (monorepo) — [`ricamocolombia/RicamoCol`](https://github.com/ricamocolombia/RicamoCol), rama `main`. Primer commit ya empujado (2026-08-27).
+- **Base de datos / Auth / Storage**: Supabase (Postgres) — proyecto real conectado vía `.env.local` en ambas apps (no versionado). Esquema en [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql), **ya aplicado** al proyecto real (pegado a mano en el SQL Editor del Dashboard el 2026-08-27; el CLI `supabase link` sigue sin poder usarse porque falta un personal access token o la contraseña de la base de datos). `apps/admin` ya usa Supabase Auth para el login — ver sección 6.
 - **Despliegue**: Vercel — dos proyectos de Vercel apuntando al mismo repo (`apps/web` y `apps/admin` como root directory de cada uno), o un solo proyecto con dos apps si se prefiere; pendiente de definir al momento de conectar Vercel.
 - **Email transaccional**: Resend (confirmación de pedidos, alertas de cuentas por pagar próximas a vencer, etc.).
 - **Frontend**: Next.js 15 (App Router) + TypeScript + Tailwind CSS en ambas apps.
@@ -130,6 +130,9 @@ Maria Jose sube o marca un diseño como `aprobado` en `apps/admin/disenos` → s
 **Ciclo de producción de un pedido:**
 Diseño aprobado por el cliente → `orders.status` pasa a `en_produccion` → se envía a la maquiladora (fuera del sistema, por ahora manual) → al recibir el producto terminado, `status` pasa a `enviado`/`entregado` y se coordina con un `courier` en `deliveries`.
 
+**Login del panel admin:**
+`apps/admin/middleware.ts` protege todas las rutas con Supabase Auth: sin sesión, redirige a `/login`; con sesión, `/login` redirige a `/`. No hay auto-registro — las cuentas se crean con `pnpm create-admin-user <email> <password>` (usa la `service_role` key vía `scripts/create-admin-user.mjs`, crea el usuario ya confirmado). Logout es un botón en el dashboard (`app/page.tsx`) que llama a la Server Action `signOut` de `app/login/actions.ts`.
+
 ## 7. Identidad de marca
 
 - Logo recibido el 2026-08-27: isotipo de una carita feliz dibujada a mano + wordmark "Ricamo", con el tagline **"Lo creas, lo llevas"**. Hay dos versiones: fondo negro con logo amarillo, y fondo amarillo con logo negro (útiles para contraste según el fondo).
@@ -144,16 +147,15 @@ Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Rica
 - Confirmar si el WhatsApp del negocio para la web es 3216245987 (+57), visto en el Instagram.
 - Elegir pasarela de pago para Colombia (candidatas naturales: Wompi, MercadoPago, PayU).
 - Dominio del sitio.
-- Credenciales reales: proyecto de Supabase (URL + keys), cuenta de Resend (API key + dominio verificado para enviar correos).
-- Confirmar si se crea el repositorio remoto en GitHub y bajo qué cuenta/organización.
+- Cuenta de Resend (API key + dominio verificado para enviar correos) — Supabase y GitHub ya están conectados.
 - Contenido de marca personal de Maria Jose (bio, redes, fotos, historia) para `/sobre-maria-jose`, más allá de lo público en Instagram.
 - Revisar con un contador si/cuándo el negocio necesitará facturación electrónica DIAN.
 
 ## 9. Roadmap por fases
 
 1. **Fundación** (hecho el 2026-08-27): estructura del monorepo, esquema de base de datos inicial, `CLAUDE.md`, memoria del proyecto en Obsidian.
-2. **Conexión de infraestructura**: crear proyecto real en Supabase y aplicar la migración, crear cuenta de Resend, `pnpm install` y verificar que ambas apps corren en local.
-3. **App admin — núcleo operativo**: autenticación (Supabase Auth), CRUD de ventas/compras/inventario/cuentas por cobrar y pagar/bancos/proveedores/domiciliarios.
+2. **Conexión de infraestructura** (hecho el 2026-08-27, falta Resend): proyecto real en Supabase conectado y con la migración aplicada, repo en GitHub con el primer push, `pnpm install`/`pnpm build` verificados en local.
+3. **App admin — núcleo operativo** (en progreso): autenticación con Supabase Auth ✅ (2026-08-27), falta el CRUD real de ventas/compras/inventario/cuentas por cobrar y pagar/bancos/proveedores/domiciliarios (hoy son placeholders).
 4. **Ecommerce — catálogo y marca personal**: catálogo real conectado a Supabase, página de Maria Jose, identidad visual definitiva (logo).
 5. **Integración**: registro automático de ventas web → admin, publicación de diseños admin → ecommerce, checkout con pasarela de pagos para el catálogo.
 6. **Pulido**: notificaciones por email (confirmaciones, alertas de cartera), SEO, despliegue final en Vercel con dominio propio.
@@ -166,6 +168,7 @@ Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Rica
 - Nombres de tablas y columnas en `snake_case`, en español para lo específico del dominio del negocio (`domiciliarios` → `couriers` en inglés técnico está bien si ya es un término universal, pero mantener el criterio usado en el `.sql` existente antes de mezclar convenciones).
 - Antes de añadir una tabla o columna nueva, revisar si ya existe algo equivalente en `supabase/migrations/0001_init.sql` — extender con una migración nueva, no editar la ya aplicada si el proyecto ya está conectado a Supabase real.
 - No commitear archivos `.env*` (ya están en `.gitignore`); usar los `.env.example` como referencia de qué variables existen.
+- pnpm aísla las dependencias por paquete: un archivo dentro de `apps/web` o `apps/admin` solo puede importar paquetes listados en el `package.json` de esa app (o de un `packages/*` del que dependa), aunque el paquete ya esté instalado en otro lado del monorepo. Si `pnpm build` falla con "Cannot find module" para algo que sí está en el lockfile, casi siempre es esto — agregar la dependencia directa donde se usa (o exponerla desde el `package.json` de `packages/supabase` o `packages/ui` con un `exports` map) y correr `pnpm install` de nuevo. Ya pasó con `@supabase/ssr` en `apps/admin/middleware.ts` y con `next` (peerDependency) en `packages/supabase/src/server.ts`.
 
 ## 11. Variables de entorno
 
@@ -175,6 +178,6 @@ Ver `apps/web/.env.example` y `apps/admin/.env.example` para el detalle completo
 
 - Este proyecto está en sus primeras horas de vida: hay estructura y esquema, pero casi ninguna pantalla tiene lógica real todavía (son placeholders marcados con `TODO`). Antes de "arreglar" algo, confirmar si es un placeholder intencional documentado aquí o un bug real.
 - `pnpm install` y `pnpm build` ya se verificaron (2026-08-27) — ambas apps compilan. Si algo no compila después de un cambio, es una regresión real, no un problema preexistente del scaffold.
-- Git está inicializado y tiene `origin` apuntando a GitHub, pero **no hay ningún commit todavía**. No commitear ni hacer push sin que el usuario lo pida explícitamente en esa sesión — es una instrucción general del entorno, no específica de este proyecto, pero aplica con fuerza aquí porque el remoto ya es real.
+- Git está inicializado, con `origin` en GitHub (`ricamocolombia/RicamoCol`) y el primer commit ya empujado a `main` (2026-08-27). No commitear ni hacer push sin que el usuario lo pida explícitamente en esa sesión — es una instrucción general del entorno, no específica de este proyecto, pero aplica con fuerza aquí porque el remoto ya es real.
 - Los archivos `.env.local` de ambas apps tienen credenciales reales de Supabase (incluida la `service_role` key). Nunca imprimirlas en la bóveda de Obsidian, en `CLAUDE.md` ni en ningún archivo que se vaya a commitear — viven solo en `.env.local` (gitignored).
 - Sigue el proceso de la sección 0 (leer/escribir en la bóveda de Obsidian) en cada sesión para que el contexto no se pierda entre conversaciones.

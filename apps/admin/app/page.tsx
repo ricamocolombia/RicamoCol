@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { signOut } from "./login/actions";
 
 const sections = [
   { href: "/ventas", label: "Ventas" },
@@ -15,7 +16,17 @@ const sections = [
 export default function DashboardPage() {
   return (
     <main className="px-6 py-10">
-      <h1 className="text-2xl font-bold mb-6">Panel Ricamo</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Panel Ricamo</h1>
+        <form action={signOut}>
+          <button
+            type="submit"
+            className="text-sm text-neutral-500 hover:text-ricamo-red"
+          >
+            Cerrar sesión
+          </button>
+        </form>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {sections.map((s) => (
           <Link

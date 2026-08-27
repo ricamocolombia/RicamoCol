@@ -4,8 +4,15 @@
   "private": true,
   "main": "src/client.ts",
   "types": "src/client.ts",
+  "exports": {
+    ".": "./src/client.ts",
+    "./server": "./src/server.ts"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "@supabase/ssr": "^0.5.1"
+  },
+  "peerDependencies": {
+    "next": "^15.0.0"
   }
 }
