@@ -52,6 +52,9 @@ function statusLabel(row: AccountReceivable): string {
   return STATUS_LABELS[row.status] ?? row.status;
 }
 
+// Datos en vivo del negocio: nunca prerenderizar de forma estatica.
+export const dynamic = "force-dynamic";
+
 export default async function CuentasPorCobrarPage({
   searchParams,
 }: {

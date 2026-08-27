@@ -14,6 +14,9 @@ interface CourierRow {
   is_active: boolean;
 }
 
+// Datos en vivo del negocio: nunca prerenderizar de forma estatica.
+export const dynamic = "force-dynamic";
+
 export default async function NuevaVentaPage({
   searchParams,
 }: {

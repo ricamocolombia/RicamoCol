@@ -28,6 +28,9 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
+// Datos en vivo del negocio: nunca prerenderizar de forma estatica.
+export const dynamic = "force-dynamic";
+
 export default async function NuevaCuentaPorPagarPage({
   searchParams,
 }: {

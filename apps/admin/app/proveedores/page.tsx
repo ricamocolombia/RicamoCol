@@ -26,6 +26,9 @@ const TYPE_STYLES: Record<SupplierRow["type"], string> = {
   otro: "bg-neutral-100 text-neutral-600",
 };
 
+// Datos en vivo del negocio: nunca prerenderizar de forma estatica.
+export const dynamic = "force-dynamic";
+
 export default async function ProveedoresPage({
   searchParams,
 }: {

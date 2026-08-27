@@ -80,6 +80,9 @@ const dateFormatter = new Intl.DateTimeFormat("es-CO", {
   timeStyle: "short",
 });
 
+// Datos en vivo del negocio: nunca prerenderizar de forma estatica.
+export const dynamic = "force-dynamic";
+
 export default async function VentasPage() {
   const supabase = createServiceRoleClient();
 
