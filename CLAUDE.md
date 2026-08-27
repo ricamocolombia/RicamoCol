@@ -64,9 +64,10 @@ Registro completo con fechas y motivos en [`vault/Ricamo/00 Contexto/Decisiones.
 
 - **Código**: GitHub (monorepo) — [`ricamocolombia/RicamoCol`](https://github.com/ricamocolombia/RicamoCol), rama `main`. Primer commit ya empujado (2026-08-27).
 - **Base de datos / Auth / Storage**: Supabase (Postgres) — proyecto real conectado vía `.env.local` en ambas apps (no versionado). Esquema en [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql), **ya aplicado** al proyecto real (pegado a mano en el SQL Editor del Dashboard el 2026-08-27; el CLI `supabase link` sigue sin poder usarse porque falta un personal access token o la contraseña de la base de datos). `apps/admin` ya usa Supabase Auth para el login — ver sección 6.
-  - **⚠️ [`supabase/migrations/0002_grants.sql`](./supabase/migrations/0002_grants.sql) todavía NO está aplicada.** Sin ella, ningún rol (ni siquiera `service_role`) puede leer/escribir ninguna tabla — Postgres exige `GRANT` de tabla además de RLS, y `0001_init.sql` nunca lo otorgó. Mientras esto no se aplique, todo el módulo admin (sección 6) está sin verificar en vivo. Ver [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Ricamo/02%20Pendientes/Backlog.md).
-  - `packages/supabase/src/types.ts` ya NO es un placeholder: tiene el `Database` completo escrito a mano a partir del `.sql` (2026-08-27), sin `as any`/`as never` en el código del admin. Si en algún momento se consigue el access token de Supabase, se puede regenerar con `supabase gen types typescript` y comparar contra este archivo.
-- **Despliegue**: Vercel — dos proyectos de Vercel apuntando al mismo repo (`apps/web` y `apps/admin` como root directory de cada uno), o un solo proyecto con dos apps si se prefiere; pendiente de definir al momento de conectar Vercel.
+  - [`0002_grants.sql`](./supabase/migrations/0002_grants.sql) ya aplicada (arregló un bug real: las tablas de `0001_init.sql` nunca tuvieron `GRANT` de Postgres, ni `service_role` podía tocarlas).
+  - **⚠️ [`supabase/migrations/0003_crm.sql`](./supabase/migrations/0003_crm.sql) todavía NO está aplicada.** Agrega `customers.city` y la tabla `marketing_campaigns` — sin ella, Clientes/Campañas/Dashboard (sección 6) fallan en vivo aunque compilen. Ver el backlog.
+  - `packages/supabase/src/types.ts` ya NO es un placeholder: tiene el `Database` completo escrito a mano a partir de las migraciones aplicadas, sin `as any`/`as never` en el código del admin. **Recordatorio**: toda migración nueva que cambie el esquema debe reflejarse también aquí a mano (no hay CLI todavía). Si en algún momento se consigue el access token de Supabase, se puede regenerar con `supabase gen types typescript` y comparar contra este archivo.
+- **Despliegue**: Vercel — el usuario conectó el repo por su cuenta (proyecto para `@ricamo/admin`). El primer deploy falló por build estático + variables de entorno faltantes, corregido el 2026-08-27 (todas las páginas de datos del admin ahora usan `export const dynamic = "force-dynamic"` — ver sección 10). Falta confirmar variables de entorno completas en Vercel y si `@ricamo/web` tiene su propio proyecto.
 - **Email transaccional**: Resend (confirmación de pedidos, alertas de cuentas por pagar próximas a vencer, etc.).
 - **Frontend**: Next.js 15 (App Router) + TypeScript + Tailwind CSS en ambas apps.
 - **Monorepo**: pnpm workspaces + Turborepo.
@@ -83,9 +84,12 @@ apps/
       sobre-maria-jose/   pagina de marca personal
       api/orders/         endpoint que registra ventas del ecommerce en Supabase
   admin/                gestion del negocio (puerto 3001 en dev)
+    lib/metrics.ts        segmentacion de clientes + formateadores, compartido entre modulos (no es una ruta)
     app/
-      page.tsx            dashboard / accesos a cada modulo
+      page.tsx            dashboard con metricas reales del negocio + accesos a cada modulo
       ventas/
+      clientes/            CRM: segmento de recompra, ficha con historial de pedidos
+      campanas/            campañas de marketing por email (Resend), segmentadas
       compras/
       inventario/
       cuentas-por-cobrar/
@@ -93,7 +97,7 @@ apps/
       bancos/
       proveedores/
       domiciliarios/
-      disenos/            banco de disenos + boton "Publicar en ecommerce"
+      disenos/            banco de disenos; [id]/publicar crea el `product` de catalogo (solo si esta aprobado)
 packages/
   ui/                   tokens de marca (colores) compartidos entre apps
   supabase/             clientes de Supabase: browser, server (SSR), service role
@@ -108,7 +112,7 @@ vault/
 
 Esquema completo y comentado en [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql). Tablas principales, agrupadas por área:
 
-- **Clientes**: `customers`.
+- **Clientes / CRM**: `customers` (incluye `city`, agregada en `0003_crm.sql`), `marketing_campaigns` (campañas de email por segmento, también en `0003_crm.sql`).
 - **Catálogo / diseños**: `designs` (banco de diseños de Maria Jose, con estado y flag `published_to_ecommerce`), `design_requests` (solicitudes de personalizado desde la web, previas a WhatsApp), `products` + `product_variants` (catálogo de stock).
 - **Ventas**: `orders` (con `source`: `web_catalogo` / `web_personalizado` / `whatsapp` / `manual`), `order_items`, `deliveries`.
 - **Inventario**: `inventory_items` (prendas en blanco), `inventory_movements`.
@@ -126,14 +130,20 @@ Cliente navega `/catalogo` → agrega producto → checkout con la pasarela de p
 **Venta personalizada (cotización → WhatsApp):**
 Cliente completa el formulario en `/personalizados` (prenda, técnica, talla, cantidad, referencia) → se crea un `design_request` → se genera un link de WhatsApp con el resumen prellenado → el cliente continúa la conversación con Maria Jose como hoy → cuando ella cierra el trato, registra manualmente la venta en `apps/admin/ventas` (o se convierte el `design_request` en `order` desde el admin).
 
-**Publicación de un diseño al ecommerce:**
-Maria Jose sube o marca un diseño como `aprobado` en `apps/admin/disenos` → si quiere venderlo como producto de catálogo, lo asocia a un `product` y activa "Publicar en ecommerce" → `published_to_ecommerce = true` (o `products.is_published = true`) → aparece de inmediato en `/catalogo` del ecommerce sin deploy ni intervención de código.
+**Publicación de un diseño al ecommerce (solo si el administrador lo aprueba):**
+Un diseño solo puede convertirse en producto vendible cuando su `status` es `aprobado` o `enviado_maquiladora` — nunca automático. Desde `apps/admin/disenos`, el administrador entra a `/disenos/[id]/publicar` (validado también en el servidor, no solo oculto en la UI) y llena nombre, tipo de prenda, precio y la primera talla → se crea el `product` (con `design_id`) + su `product_variant`, `products.is_published = true` y se sincroniza `designs.published_to_ecommerce`. Después, publicar/despublicar es un toggle que alterna `products.is_published` (fuente de verdad que ya lee el ecommerce).
 
 **Ciclo de producción de un pedido:**
 Diseño aprobado por el cliente → `orders.status` pasa a `en_produccion` → se envía a la maquiladora (fuera del sistema, por ahora manual) → al recibir el producto terminado, `status` pasa a `enviado`/`entregado` y se coordina con un `courier` en `deliveries`.
 
 **Login del panel admin:**
 `apps/admin/middleware.ts` protege todas las rutas con Supabase Auth: sin sesión, redirige a `/login`; con sesión, `/login` redirige a `/`. No hay auto-registro — las cuentas se crean con `pnpm create-admin-user <email> <password>` (usa la `service_role` key vía `scripts/create-admin-user.mjs`, crea el usuario ya confirmado). Logout es un botón en el dashboard (`app/page.tsx`) que llama a la Server Action `signOut` de `app/login/actions.ts`.
+
+**Segmentación de clientes y campañas de marketing:**
+`apps/admin/lib/metrics.ts` clasifica cada cliente en `sin_compras` / `nuevo` / `recurrente` / `inactivo` (más de 90 días sin comprar) a partir de su historial en `orders` — se calcula en memoria, no hay columna ni vista en la base de datos para esto. `apps/admin/campanas` usa la misma clasificación para segmentar el envío: una campaña en borrador se manda por correo (Resend) a todos los clientes con email cuyo segmento calce, de forma secuencial (tope de 500 destinatarios).
+
+**Dashboard del negocio:**
+`apps/admin/app/page.tsx` calcula en memoria (sin vistas SQL) las métricas clave a partir de `orders`, `transactions`, `customers`, `accounts_receivable/payable` e `inventory_items`: ventas, ingresos/salidas de bancos, % de recompra, cuentas pendientes, top ciudades/clientes, ventas por origen y gastos por categoría.
 
 ## 7. Identidad de marca
 
@@ -146,7 +156,8 @@ Diseño aprobado por el cliente → `orders.status` pasa a `en_produccion` → s
 
 Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Ricamo/02%20Pendientes/Backlog.md). Los bloqueos más importantes que dependen del usuario:
 
-- **Aplicar `supabase/migrations/0002_grants.sql`** en el SQL Editor del Dashboard de Supabase — sin esto el módulo admin no se puede probar en vivo (ver sección 4).
+- **Aplicar `supabase/migrations/0003_crm.sql`** en el SQL Editor del Dashboard de Supabase — sin esto, Clientes/Campañas/Dashboard fallan en vivo (ver sección 4).
+- Confirmar que las variables de entorno de Vercel quedaron completas (`SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` como "Secret"/"Config" según corresponda) — el primer deploy falló por esto.
 - Confirmar si el WhatsApp del negocio para la web es 3216245987 (+57), visto en el Instagram.
 - Elegir pasarela de pago para Colombia (candidatas naturales: Wompi, MercadoPago, PayU).
 - Dominio del sitio.
@@ -158,7 +169,7 @@ Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Rica
 
 1. **Fundación** (hecho el 2026-08-27): estructura del monorepo, esquema de base de datos inicial, `CLAUDE.md`, memoria del proyecto en Obsidian.
 2. **Conexión de infraestructura** (hecho el 2026-08-27, falta Resend): proyecto real en Supabase conectado y con la migración aplicada, repo en GitHub con el primer push, `pnpm install`/`pnpm build` verificados en local.
-3. **App admin — núcleo operativo** (construido el 2026-08-27, pendiente de verificar en vivo): autenticación con Supabase Auth, y los 9 módulos (ventas, compras, inventario, cuentas por cobrar y pagar, bancos, proveedores, domiciliarios, diseños) con listado real + alta conectados a Supabase — construidos con 4 agentes en paralelo, uno por área de negocio. Falta: aplicar `0002_grants.sql` para poder probarlo en vivo, editar/eliminar registros existentes, y un módulo de clientes dedicado (hoy Ventas lo resuelve inline). Detalle completo en `vault/Ricamo/01 Progreso/2026-08-27.md` y en el backlog.
+3. **App admin — núcleo operativo** (construido y verificado en vivo el 2026-08-27): autenticación con Supabase Auth, los 9 módulos operativos (ventas, compras, inventario, cuentas por cobrar y pagar, bancos, proveedores, domiciliarios, diseños), más Clientes/CRM, Campañas de marketing, Dashboard con métricas reales, y la conexión Diseño→Producto con aprobación explícita del administrador. Pendiente de verificar en vivo lo último (falta aplicar `0003_crm.sql`). Falta: editar/eliminar registros existentes en varios módulos, líneas múltiples por venta/compra, gestión de usuarios del panel. Detalle completo en `vault/Ricamo/01 Progreso/2026-08-27.md` y en el backlog.
 4. **Ecommerce — catálogo y marca personal**: catálogo real conectado a Supabase, página de Maria Jose, identidad visual definitiva (logo).
 5. **Integración**: registro automático de ventas web → admin, publicación de diseños admin → ecommerce, checkout con pasarela de pagos para el catálogo.
 6. **Pulido**: notificaciones por email (confirmaciones, alertas de cartera), SEO, despliegue final en Vercel con dominio propio.
@@ -172,6 +183,9 @@ Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Rica
 - Antes de añadir una tabla o columna nueva, revisar si ya existe algo equivalente en `supabase/migrations/0001_init.sql` — extender con una migración nueva, no editar la ya aplicada si el proyecto ya está conectado a Supabase real.
 - No commitear archivos `.env*` (ya están en `.gitignore`); usar los `.env.example` como referencia de qué variables existen.
 - pnpm aísla las dependencias por paquete: un archivo dentro de `apps/web` o `apps/admin` solo puede importar paquetes listados en el `package.json` de esa app (o de un `packages/*` del que dependa), aunque el paquete ya esté instalado en otro lado del monorepo. Si `pnpm build` falla con "Cannot find module" para algo que sí está en el lockfile, casi siempre es esto — agregar la dependencia directa donde se usa (o exponerla desde el `package.json` de `packages/supabase` o `packages/ui` con un `exports` map) y correr `pnpm install` de nuevo. Ya pasó con `@supabase/ssr` en `apps/admin/middleware.ts` y con `next` (peerDependency) en `packages/supabase/src/server.ts`.
+- **Toda página de `apps/admin` que consulte datos de negocio vía `createServiceRoleClient()` debe llevar `export const dynamic = "force-dynamic";`** justo antes del componente. Sin esto, Next puede decidir prerenderizarla como estática en el build — sirviendo datos congelados en producción, y además ejecutando la consulta a Supabase durante el build mismo (lo que rompió el primer deploy en Vercel por falta de env vars ahí). Aplica a toda página nueva del admin que muestre datos reales, no solo a las que ya lo tienen.
+- Validar siempre en el servidor (Server Action), no solo ocultar en la UI, cualquier regla de negocio de "esto requiere aprobación" — ej. el flujo Diseño→Producto revisa `design.status` de nuevo dentro de la Server Action antes de crear el `product`, no confía en que el botón estuviera oculto.
+- Al usar el patrón `function fail(message): never { redirect(...) }` para cortar una Server Action con un error, si `fail` necesita datos del closure (como un `id` de la URL) declararlo como función de módulo con esos datos como parámetro (`function fail(id, message): never {...}`), no como `const fail = () => {...}` definida dentro de la función — la segunda forma perdió el narrowing de TypeScript de variables validadas más abajo cuando había un `while`/loop de por medio (visto en `disenos/[id]/publicar/actions.ts`).
 
 ## 11. Variables de entorno
 
@@ -179,7 +193,7 @@ Ver `apps/web/.env.example` y `apps/admin/.env.example` para el detalle completo
 
 ## 12. Notas para Claude Code en este repo
 
-- El ecommerce (`apps/web`) sigue siendo casi todo placeholders con `TODO`. El admin (`apps/admin`) ya tiene los 9 módulos con lógica real (ver sección 9) — no asumas que todavía es solo scaffold ahí. Antes de "arreglar" algo, confirmar si es un placeholder intencional documentado aquí o un bug real.
+- El ecommerce (`apps/web`) sigue siendo casi todo placeholders con `TODO`. El admin (`apps/admin`) ya tiene 12 módulos con lógica real (ver sección 9) — no asumas que todavía es solo scaffold ahí. Antes de "arreglar" algo, confirmar si es un placeholder intencional documentado aquí o un bug real.
 - `pnpm install` y `pnpm build` ya se verificaron (2026-08-27) — ambas apps compilan. Si algo no compila después de un cambio, es una regresión real, no un problema preexistente del scaffold.
 - Git está inicializado, con `origin` en GitHub (`ricamocolombia/RicamoCol`) y el primer commit ya empujado a `main` (2026-08-27). No commitear ni hacer push sin que el usuario lo pida explícitamente en esa sesión — es una instrucción general del entorno, no específica de este proyecto, pero aplica con fuerza aquí porque el remoto ya es real.
 - Los archivos `.env.local` de ambas apps tienen credenciales reales de Supabase (incluida la `service_role` key). Nunca imprimirlas en la bóveda de Obsidian, en `CLAUDE.md` ni en ningún archivo que se vaya a commitear — viven solo en `.env.local` (gitignored).

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
-import { updateDesignStatus, setEcommercePublish } from "./actions";
+import { updateDesignStatus, toggleEcommercePublish } from "./actions";
 
 type DesignTechnique = "bordado" | "estampado";
 type DesignStatus =
@@ -27,6 +27,13 @@ interface CustomerRow {
   id: string;
   full_name: string;
   phone: string | null;
+}
+
+interface ProductRow {
+  id: string;
+  design_id: string | null;
+  is_published: boolean;
+  base_price_cop: number;
 }
 
 const TECHNIQUE_LABELS: Record<DesignTechnique, string> = {
@@ -61,6 +68,11 @@ const FORWARD_ACTION: Partial<
   enviado_maquiladora: { status: "archivado", label: "Archivar" },
 };
 
+// Solo un diseño aprobado (o mas adelante en el flujo) puede convertirse en
+// producto vendible -- es la aprobacion explicita del administrador que
+// pidio el negocio, no algo automatico.
+const PUBLISHABLE_STATUSES: DesignStatus[] = ["aprobado", "enviado_maquiladora"];
+
 const dateFormatter = new Intl.DateTimeFormat("es-CO", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -77,20 +89,28 @@ export default async function DisenosPage({
   const { error: errorParam } = await searchParams;
   const supabase = createServiceRoleClient();
 
-  const [{ data: designsData, error: designsError }, { data: customersData }] =
-    await Promise.all([
-      supabase
-        .from("designs")
-        .select(
-          "id, name, technique, status, customer_id, image_url, notes, published_to_ecommerce, published_at, created_at"
-        )
-        .order("created_at", { ascending: false }),
-      supabase.from("customers").select("id, full_name, phone"),
-    ]);
+  const [
+    { data: designsData, error: designsError },
+    { data: customersData },
+    { data: productsData },
+  ] = await Promise.all([
+    supabase
+      .from("designs")
+      .select(
+        "id, name, technique, status, customer_id, image_url, notes, published_to_ecommerce, published_at, created_at"
+      )
+      .order("created_at", { ascending: false }),
+    supabase.from("customers").select("id, full_name, phone"),
+    supabase.from("products").select("id, design_id, is_published, base_price_cop"),
+  ]);
 
   const designs = (designsData ?? []) as unknown as DesignRow[];
   const customers = (customersData ?? []) as unknown as CustomerRow[];
+  const products = (productsData ?? []) as unknown as ProductRow[];
   const customersById = new Map(customers.map((c) => [c.id, c]));
+  const productByDesignId = new Map(
+    products.filter((p) => p.design_id).map((p) => [p.design_id as string, p])
+  );
 
   return (
     <main className="px-6 py-10">
@@ -143,6 +163,8 @@ export default async function DisenosPage({
                   ? customersById.get(design.customer_id)
                   : undefined;
                 const forward = FORWARD_ACTION[design.status];
+                const product = productByDesignId.get(design.id);
+                const canPublish = PUBLISHABLE_STATUSES.includes(design.status);
 
                 return (
                   <tr
@@ -185,7 +207,11 @@ export default async function DisenosPage({
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {design.published_to_ecommerce ? (
+                      {!product ? (
+                        <span className="inline-block rounded-full bg-neutral-100 text-neutral-500 text-xs font-medium px-2 py-1">
+                          Sin producto
+                        </span>
+                      ) : product.is_published ? (
                         <span className="inline-block rounded-full bg-green-100 text-green-700 text-xs font-medium px-2 py-1">
                           Publicado
                         </span>
@@ -276,28 +302,32 @@ export default async function DisenosPage({
                           </form>
                         )}
 
-                        <form action={setEcommercePublish}>
-                          <input type="hidden" name="id" value={design.id} />
-                          <input
-                            type="hidden"
-                            name="publish"
-                            value={
-                              design.published_to_ecommerce ? "false" : "true"
-                            }
-                          />
-                          <button
-                            type="submit"
-                            className={`w-full text-xs rounded-lg px-2 py-1.5 border ${
-                              design.published_to_ecommerce
-                                ? "border-neutral-300 text-neutral-600 hover:border-ricamo-red hover:text-ricamo-red"
-                                : "border-ricamo-black text-ricamo-black hover:bg-ricamo-black hover:text-white"
-                            }`}
+                        {product ? (
+                          <form action={toggleEcommercePublish}>
+                            <input type="hidden" name="design_id" value={design.id} />
+                            <button
+                              type="submit"
+                              className={`w-full text-xs rounded-lg px-2 py-1.5 border ${
+                                product.is_published
+                                  ? "border-neutral-300 text-neutral-600 hover:border-ricamo-red hover:text-ricamo-red"
+                                  : "border-ricamo-black text-ricamo-black hover:bg-ricamo-black hover:text-white"
+                              }`}
+                            >
+                              {product.is_published ? "Despublicar" : "Publicar"}
+                            </button>
+                          </form>
+                        ) : canPublish ? (
+                          <Link
+                            href={`/disenos/${design.id}/publicar`}
+                            className="w-full text-xs text-center rounded-lg px-2 py-1.5 border border-ricamo-black text-ricamo-black hover:bg-ricamo-black hover:text-white"
                           >
-                            {design.published_to_ecommerce
-                              ? "Despublicar"
-                              : "Publicar en ecommerce"}
-                          </button>
-                        </form>
+                            Crear producto y publicar
+                          </Link>
+                        ) : (
+                          <p className="text-xs text-neutral-400 text-center">
+                            Requiere aprobación para publicarse
+                          </p>
+                        )}
 
                         <Link
                           href={`/disenos/${design.id}/editar`}

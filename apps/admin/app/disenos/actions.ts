@@ -48,29 +48,57 @@ export async function updateDesignStatus(formData: FormData) {
   redirect("/disenos");
 }
 
-// Publica o despublica un diseño en el ecommerce. Nota: esto NO crea ni
-// conecta un `product` de catálogo (ese flujo queda fuera de alcance) — solo
-// marca el diseño como visible/no visible via `published_to_ecommerce`.
-export async function setEcommercePublish(formData: FormData) {
-  const id = String(formData.get("id") ?? "").trim();
-  const publish = String(formData.get("publish") ?? "").trim() === "true";
+// Publica o despublica en el ecommerce el producto de catalogo ya
+// vinculado a un diseño. Si el diseño todavia no tiene un `product` (nunca
+// se aprobo su creacion), no hay nada que alternar: se redirige al flujo de
+// "crear producto" en vez de fallar en silencio.
+export async function toggleEcommercePublish(formData: FormData) {
+  const designId = String(formData.get("design_id") ?? "").trim();
 
-  if (!id) {
+  if (!designId) {
     fail("Diseño inválido");
   }
 
   const supabase = createServiceRoleClient();
 
-  const { error } = await supabase
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select("id, is_published")
+    .eq("design_id", designId)
+    .maybeSingle();
+
+  if (productError) {
+    fail("No se pudo consultar el producto: " + productError.message);
+  }
+
+  if (!product) {
+    redirect(`/disenos/${designId}/publicar`);
+  }
+
+  const newValue = !product.is_published;
+
+  const { error: productUpdateError } = await supabase
+    .from("products")
+    .update({ is_published: newValue })
+    .eq("id", product.id);
+
+  if (productUpdateError) {
+    fail("No se pudo actualizar la publicación: " + productUpdateError.message);
+  }
+
+  const { error: designUpdateError } = await supabase
     .from("designs")
     .update({
-      published_to_ecommerce: publish,
-      published_at: publish ? new Date().toISOString() : null,
+      published_to_ecommerce: newValue,
+      published_at: newValue ? new Date().toISOString() : null,
     })
-    .eq("id", id);
+    .eq("id", designId);
 
-  if (error) {
-    fail("No se pudo actualizar la publicación: " + error.message);
+  if (designUpdateError) {
+    fail(
+      "El producto se actualizó pero no se pudo sincronizar el diseño: " +
+        designUpdateError.message
+    );
   }
 
   redirect("/disenos");

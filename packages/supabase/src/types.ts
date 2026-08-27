@@ -30,6 +30,7 @@ export interface Database {
           phone: string | null;
           email: string | null;
           instagram_handle: string | null;
+          city: string | null;
           notes: string | null;
           created_at: Timestamp;
           updated_at: Timestamp;
@@ -40,11 +41,43 @@ export interface Database {
           phone?: string | null;
           email?: string | null;
           instagram_handle?: string | null;
+          city?: string | null;
           notes?: string | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
         Update: Partial<Database["public"]["Tables"]["customers"]["Insert"]>;
+        Relationships: [];
+      };
+
+      marketing_campaigns: {
+        Row: {
+          id: Uuid;
+          name: string;
+          subject: string;
+          body: string;
+          segment: "todos" | "nuevos" | "recurrentes" | "inactivos";
+          status: "borrador" | "enviada" | "fallida";
+          recipients_count: number | null;
+          sent_at: Timestamp | null;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: Uuid;
+          name: string;
+          subject: string;
+          body: string;
+          segment?: "todos" | "nuevos" | "recurrentes" | "inactivos";
+          status?: "borrador" | "enviada" | "fallida";
+          recipients_count?: number | null;
+          sent_at?: Timestamp | null;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["marketing_campaigns"]["Insert"]
+        >;
         Relationships: [];
       };
 
