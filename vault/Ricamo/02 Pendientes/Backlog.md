@@ -49,7 +49,14 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [ ] Subida de imágenes para diseños (`designs.image_url` es hoy un campo de texto libre, sin integración con Supabase Storage).
 - [ ] Trigger/cron que marque `status = 'vencido'` automáticamente en `accounts_receivable`/`accounts_payable` al pasar la fecha de vencimiento — hoy el "vencido" se calcula solo visualmente en la UI comparando la fecha.
 - [ ] Revisar si `transactions.reference_order_id`/`reference_purchase_id` (y los de `inventory_movements`) deberían tener foreign key real hacia `orders`/`purchases` — hoy son UUID sueltos validados solo por formato, a diferencia de `accounts_receivable.order_id`/`accounts_payable.purchase_id` que sí tienen FK.
-- [ ] Compra con renglón de "descripción libre" (sin `inventory_item_id`) que llega como "recibida" no genera movimiento de inventario automático — es inherente a que el campo es opcional, decidir si vale la pena resolverlo (¿crear el ítem de inventario al vuelo?).
+- [x] **Compra con renglón de "descripción libre" resuelto de otra forma** (2026-08-28): ya no es necesario crear el ítem de inventario al vuelo para ese caso — ahora Compras SIEMPRE crea/encuentra el `inventory_item` cuando se indica bodega + tipo de prenda (ver bodegas abajo); la descripción libre queda solo para compras que de verdad no son prenda de bodega (insumos, etc.), que intencionalmente no tocan inventario.
+- [x] **Bodegas + inventario por bodega + compras que alimentan bodega + alertas de stock por correo** (2026-08-28, a pedido del usuario) — ver detalle completo en `01 Progreso/2026-08-28.md`. Resumen:
+  - `apps/admin/app/bodegas`: CRUD de bodegas (tabla `warehouses`), cantidad abierta — hoy 2 (estampados/bordados), pueden agregarse o desactivarse sin tocar código.
+  - `inventory_items` ahora pertenece a una bodega (`warehouse_id`) y su `garment_type` dejó de ser un enum fijo (camiseta/buzo) para ser texto libre, igual que en Ventas.
+  - Compras (`/compras/nueva`) ahora pide número de factura y, si se indica bodega + tipo de prenda, busca o crea automáticamente el `inventory_item` de esa combinación en esa bodega — si la compra ya está "recibida", suma el stock ahí mismo.
+  - Inventario (`/inventario`) agrupa la tabla por bodega, permite editar el nivel mínimo y silenciar/activar la alerta por ítem (nuevo campo `alert_enabled`), y tiene un botón "Enviar alerta por correo ahora".
+  - Alertas nocturnas automáticas vía **Vercel Cron** (`apps/admin/vercel.json`, todos los días a las 11pm hora Colombia) llamando a `apps/admin/app/api/cron/stock-alerts`, protegido con la variable `CRON_SECRET` (falta configurarla en Vercel, ver Infraestructura abajo). El correo destino se configura en `/configuracion`.
+  - Verificado en vivo con escritura real de punta a punta (compra → creación de ítem en la bodega correcta → suma de stock), sin dejar datos de prueba. El envío de correo en sí no se probó de extremo a extremo porque todavía no hay un correo de alertas configurado ni `RESEND_API_KEY`/`RESEND_FROM_EMAIL`.
 
 ## Integración
 - [ ] Webhook/Server Action que registre automáticamente en `orders` cada venta hecha desde el ecommerce.
@@ -59,4 +66,6 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 ## Infraestructura
 - [x] Repo conectado a Vercel por el usuario (proyecto `ricamo-col-a...` para `@ricamo/admin`). El primer deploy falló por build estático + variables de entorno faltantes — corregido el 2026-08-27 (ver nota de progreso). Falta confirmar si `@ricamo/web` también tiene su propio proyecto en Vercel.
 - [ ] Variables de entorno en Vercel: confirmar que además de `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` (Type "Config", no "Secret" — son públicas por diseño) están `SUPABASE_SERVICE_ROLE_KEY`/`RESEND_API_KEY`/`RESEND_FROM_EMAIL` (Type "Secret"/"Config" según corresponda) para que el panel funcione en producción y no solo compile.
+- [ ] **Falta agregar `CRON_SECRET`** (Type "Secret", cualquier string aleatorio largo) en las variables de entorno de Vercel para `@ricamo/admin` — sin esto, `/api/cron/stock-alerts` rechaza todas las llamadas (incluida la de Vercel Cron) y las alertas nocturnas nunca se envían.
+- [ ] Configurar el correo de alertas de inventario en `/configuracion` (campo "Correo de alertas") para que las alertas nocturnas tengan a dónde llegar.
 - [x] Primer commit + push a GitHub hecho (2026-08-27).

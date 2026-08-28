@@ -4,6 +4,7 @@ import { createServiceRoleClient } from "@ricamo/supabase/server";
 interface PurchaseRow {
   id: string;
   supplier_id: string;
+  invoice_number: string | null;
   status: "pendiente" | "recibida" | "cancelada";
   total_cop: number;
   notes: string | null;
@@ -48,7 +49,7 @@ export default async function ComprasPage() {
     await Promise.all([
       supabase
         .from("purchases")
-        .select("id, supplier_id, status, total_cop, notes, created_at")
+        .select("id, supplier_id, invoice_number, status, total_cop, notes, created_at")
         .order("created_at", { ascending: false }),
       supabase.from("suppliers").select("id, name"),
     ]);
@@ -90,6 +91,7 @@ export default async function ComprasPage() {
             <thead>
               <tr className="border-b border-neutral-200 text-left text-neutral-500">
                 <th className="px-4 py-3 font-medium">Proveedor</th>
+                <th className="px-4 py-3 font-medium">Factura</th>
                 <th className="px-4 py-3 font-medium">Estado</th>
                 <th className="px-4 py-3 font-medium">Total</th>
                 <th className="px-4 py-3 font-medium">Notas</th>
@@ -107,6 +109,9 @@ export default async function ComprasPage() {
                   >
                     <td className="px-4 py-3 font-medium">
                       {supplier?.name ?? "Proveedor eliminado"}
+                    </td>
+                    <td className="px-4 py-3 text-neutral-600">
+                      {purchase.invoice_number ?? "—"}
                     </td>
                     <td className="px-4 py-3">
                       <span

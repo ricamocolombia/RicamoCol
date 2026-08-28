@@ -262,10 +262,12 @@ export interface Database {
         Row: {
           id: Uuid;
           name: string;
-          garment_type: "camiseta" | "buzo";
+          garment_type: string;
           size: string | null;
           color: string | null;
           supplier_id: Uuid | null;
+          warehouse_id: Uuid | null;
+          alert_enabled: boolean;
           quantity_on_hand: number;
           reorder_level: number;
           unit_cost_cop: number | null;
@@ -275,10 +277,12 @@ export interface Database {
         Insert: {
           id?: Uuid;
           name: string;
-          garment_type: "camiseta" | "buzo";
+          garment_type: string;
           size?: string | null;
           color?: string | null;
           supplier_id?: Uuid | null;
+          warehouse_id?: Uuid | null;
+          alert_enabled?: boolean;
           quantity_on_hand?: number;
           reorder_level?: number;
           unit_cost_cop?: number | null;
@@ -288,6 +292,42 @@ export interface Database {
         Update: Partial<
           Database["public"]["Tables"]["inventory_items"]["Insert"]
         >;
+        Relationships: [];
+      };
+
+      warehouses: {
+        Row: {
+          id: Uuid;
+          name: string;
+          supplier_id: Uuid | null;
+          is_active: boolean;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: Uuid;
+          name: string;
+          supplier_id?: Uuid | null;
+          is_active?: boolean;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<Database["public"]["Tables"]["warehouses"]["Insert"]>;
+        Relationships: [];
+      };
+
+      app_settings: {
+        Row: {
+          key: string;
+          value: string | null;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          key: string;
+          value?: string | null;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<Database["public"]["Tables"]["app_settings"]["Insert"]>;
         Relationships: [];
       };
 
@@ -546,6 +586,7 @@ export interface Database {
         Row: {
           id: Uuid;
           supplier_id: Uuid;
+          invoice_number: string | null;
           status: "pendiente" | "recibida" | "cancelada";
           total_cop: number;
           notes: string | null;
@@ -555,6 +596,7 @@ export interface Database {
         Insert: {
           id?: Uuid;
           supplier_id: Uuid;
+          invoice_number?: string | null;
           status?: "pendiente" | "recibida" | "cancelada";
           total_cop?: number;
           notes?: string | null;

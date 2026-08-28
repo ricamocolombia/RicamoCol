@@ -42,3 +42,21 @@ export async function actualizarCostoEstampado(formData: FormData) {
 
   redirect("/configuracion");
 }
+
+export async function actualizarEmailAlertas(formData: FormData) {
+  const email = String(formData.get("stock_alert_email") ?? "").trim();
+
+  const supabase = createServiceRoleClient();
+
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ key: "stock_alert_email", value: email || null });
+
+  if (error) {
+    redirect(
+      `/configuracion?error=${encodeURIComponent("No se pudo guardar el correo de alertas: " + error.message)}`
+    );
+  }
+
+  redirect("/configuracion");
+}

@@ -56,6 +56,10 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// api/cron/* queda fuera: Vercel Cron llama esas rutas sin sesion de
+// usuario (se protegen solas con CRON_SECRET, ver app/api/cron/*/route.ts).
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|brand/).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.png|brand/|api/cron/).*)",
+  ],
 };

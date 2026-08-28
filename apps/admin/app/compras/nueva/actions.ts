@@ -18,12 +18,15 @@ export async function crearCompra(formData: FormData) {
   const supabase = createServiceRoleClient();
 
   const supplierId = String(formData.get("supplier_id") ?? "").trim();
-  const status = String(formData.get("status") ?? "pendiente").trim();
+  const invoiceNumber = String(formData.get("invoice_number") ?? "").trim();
+  const statusRaw = String(formData.get("status") ?? "pendiente").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
-  const itemInventoryItemId = String(
-    formData.get("item_inventory_item_id") ?? ""
-  ).trim();
+  const warehouseId = String(formData.get("warehouse_id") ?? "").trim();
+  const garmentType = String(formData.get("garment_type") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
+  const size = String(formData.get("size") ?? "").trim();
+
   const itemDescription = String(formData.get("item_description") ?? "").trim();
   const itemQuantityRaw = String(formData.get("item_quantity") ?? "1");
   const itemUnitCostRaw = String(formData.get("item_unit_cost_cop") ?? "0");
@@ -34,13 +37,19 @@ export async function crearCompra(formData: FormData) {
   if (!supplierId) {
     fail("El proveedor es obligatorio");
   }
-  if (!isPurchaseStatus(status)) {
+  if (!isPurchaseStatus(statusRaw)) {
     fail("Estado de compra inválido");
   }
-  if (!itemInventoryItemId && !itemDescription) {
+  const status: PurchaseStatus = statusRaw;
+
+  const isWarehouseItem = Boolean(warehouseId && garmentType);
+  if (!isWarehouseItem && !itemDescription) {
     fail(
-      "Selecciona un ítem de inventario o escribe una descripción para lo comprado"
+      "Llena bodega + tipo de prenda, o escribe una descripción libre para lo comprado"
     );
+  }
+  if (warehouseId && !garmentType) {
+    fail("Si eliges una bodega, el tipo de prenda es obligatorio");
   }
   if (!Number.isFinite(itemQuantity) || itemQuantity < 1) {
     fail("La cantidad debe ser un número mayor a 0");
@@ -55,6 +64,7 @@ export async function crearCompra(formData: FormData) {
     .from("purchases")
     .insert({
       supplier_id: supplierId,
+      invoice_number: invoiceNumber || null,
       status,
       total_cop: totalCop,
       notes: notes || null,
@@ -69,33 +79,90 @@ export async function crearCompra(formData: FormData) {
     );
   }
 
-  const purchaseId = (purchase as { id: string }).id;
+  const purchaseId = purchase.id;
+
+  // Si la compra trae bodega + tipo de prenda, buscamos (o creamos) el
+  // inventory_item exacto para esa combinacion bodega/tipo/color/talla. Cada
+  // bodega tiene su propia fila de inventario, aunque sea la misma prenda.
+  let inventoryItemId: string | null = null;
+
+  if (isWarehouseItem) {
+    let query = supabase
+      .from("inventory_items")
+      .select("id")
+      .eq("warehouse_id", warehouseId)
+      .eq("garment_type", garmentType);
+
+    query = color ? query.eq("color", color) : query.is("color", null);
+    query = size ? query.eq("size", size) : query.is("size", null);
+
+    const { data: existingItem, error: findError } = await query.maybeSingle();
+
+    if (findError) {
+      fail(
+        "No se pudo buscar el ítem de inventario: " + findError.message
+      );
+    }
+
+    if (existingItem) {
+      inventoryItemId = existingItem.id;
+    } else {
+      const name = [garmentType, color, size ? `talla ${size}` : null]
+        .filter(Boolean)
+        .join(" ");
+
+      const { data: newItem, error: createError } = await supabase
+        .from("inventory_items")
+        .insert({
+          name,
+          garment_type: garmentType,
+          color: color || null,
+          size: size || null,
+          supplier_id: supplierId,
+          warehouse_id: warehouseId,
+          quantity_on_hand: 0,
+        })
+        .select("id")
+        .single();
+
+      if (createError || !newItem) {
+        fail(
+          "No se pudo crear el ítem de inventario para esa bodega: " +
+            (createError?.message ?? "error desconocido")
+        );
+      }
+
+      inventoryItemId = newItem.id;
+    }
+  }
+
+  const purchaseItemDescription = isWarehouseItem
+    ? [garmentType, color, size ? `talla ${size}` : null].filter(Boolean).join(" ")
+    : itemDescription;
 
   const { error: itemError } = await supabase.from("purchase_items").insert({
     purchase_id: purchaseId,
-    inventory_item_id: itemInventoryItemId || null,
-    description: itemDescription || null,
+    inventory_item_id: inventoryItemId,
+    description: purchaseItemDescription || null,
     quantity: itemQuantity,
     unit_cost_cop: itemUnitCost,
   });
 
   if (itemError) {
     fail(
-      "La compra se creó pero no se pudo guardar el detalle: " +
-        itemError.message
+      "La compra se creó pero no se pudo guardar el detalle: " + itemError.message
     );
   }
 
-  // Si la compra ya llegó "recibida" y el renglón apunta a un ítem de
-  // inventario existente, sumamos el stock y dejamos el movimiento
-  // registrado. Si el renglón es solo descripción libre (sin
-  // inventory_item_id), no hay a qué ítem sumarle stock: la compra queda
-  // registrada igual, pero sin movimiento de inventario automático.
-  if (status === "recibida" && itemInventoryItemId) {
+  // Si la compra ya llego "recibida" y quedo vinculada a un item de
+  // inventario, sumamos el stock de esa bodega y dejamos el movimiento
+  // registrado. Si es descripcion libre (sin bodega), no hay a que item
+  // sumarle stock -- la compra queda registrada igual.
+  if (status === "recibida" && inventoryItemId) {
     const { data: currentItem, error: fetchError } = await supabase
       .from("inventory_items")
       .select("id, quantity_on_hand")
-      .eq("id", itemInventoryItemId)
+      .eq("id", inventoryItemId)
       .single();
 
     if (fetchError || !currentItem) {
@@ -104,13 +171,12 @@ export async function crearCompra(formData: FormData) {
       );
     }
 
-    const current = currentItem as { id: string; quantity_on_hand: number };
-    const newQuantity = current.quantity_on_hand + itemQuantity;
+    const newQuantity = currentItem.quantity_on_hand + itemQuantity;
 
     const { error: movementError } = await supabase
       .from("inventory_movements")
       .insert({
-        inventory_item_id: itemInventoryItemId,
+        inventory_item_id: inventoryItemId,
         movement_type: "entrada_compra",
         quantity: itemQuantity,
         reference_purchase_id: purchaseId,
@@ -127,7 +193,7 @@ export async function crearCompra(formData: FormData) {
     const { error: updateError } = await supabase
       .from("inventory_items")
       .update({ quantity_on_hand: newQuantity })
-      .eq("id", itemInventoryItemId);
+      .eq("id", inventoryItemId);
 
     if (updateError) {
       fail(

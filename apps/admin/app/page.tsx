@@ -12,6 +12,7 @@ const sections = [
   { href: "/campanas", label: "Campañas" },
   { href: "/compras", label: "Compras" },
   { href: "/inventario", label: "Inventario" },
+  { href: "/bodegas", label: "Bodegas" },
   { href: "/cuentas-por-cobrar", label: "Cuentas por cobrar" },
   { href: "/cuentas-por-pagar", label: "Cuentas por pagar" },
   { href: "/bancos", label: "Bancos" },
