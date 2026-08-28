@@ -64,8 +64,8 @@ Registro completo con fechas y motivos en [`vault/Ricamo/00 Contexto/Decisiones.
 
 - **Código**: GitHub (monorepo) — [`ricamocolombia/RicamoCol`](https://github.com/ricamocolombia/RicamoCol), rama `main`. Primer commit ya empujado (2026-08-27).
 - **Base de datos / Auth / Storage**: Supabase (Postgres) — proyecto real conectado vía `.env.local` en ambas apps (no versionado). Esquema en [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql), **ya aplicado** al proyecto real (pegado a mano en el SQL Editor del Dashboard el 2026-08-27; el CLI `supabase link` sigue sin poder usarse porque falta un personal access token o la contraseña de la base de datos). `apps/admin` ya usa Supabase Auth para el login — ver sección 6.
-  - [`0002_grants.sql`](./supabase/migrations/0002_grants.sql) ya aplicada (arregló un bug real: las tablas de `0001_init.sql` nunca tuvieron `GRANT` de Postgres, ni `service_role` podía tocarlas).
-  - **⚠️ [`supabase/migrations/0003_crm.sql`](./supabase/migrations/0003_crm.sql) todavía NO está aplicada.** Agrega `customers.city` y la tabla `marketing_campaigns` — sin ella, Clientes/Campañas/Dashboard (sección 6) fallan en vivo aunque compilen. Ver el backlog.
+  - [`0002_grants.sql`](./supabase/migrations/0002_grants.sql) y [`0003_crm.sql`](./supabase/migrations/0003_crm.sql) ya aplicadas (grants de Postgres + `customers.city`/`marketing_campaigns`).
+  - [`0004_ventas_completas.sql`](./supabase/migrations/0004_ventas_completas.sql) y [`0005_precios_estampado.sql`](./supabase/migrations/0005_precios_estampado.sql) ya aplicadas y verificadas en vivo (2026-08-28).
   - `packages/supabase/src/types.ts` ya NO es un placeholder: tiene el `Database` completo escrito a mano a partir de las migraciones aplicadas, sin `as any`/`as never` en el código del admin. **Recordatorio**: toda migración nueva que cambie el esquema debe reflejarse también aquí a mano (no hay CLI todavía). Si en algún momento se consigue el access token de Supabase, se puede regenerar con `supabase gen types typescript` y comparar contra este archivo.
 - **Despliegue**: Vercel — el usuario conectó el repo por su cuenta (proyecto para `@ricamo/admin`). El primer deploy falló por build estático + variables de entorno faltantes, corregido el 2026-08-27 (todas las páginas de datos del admin ahora usan `export const dynamic = "force-dynamic"` — ver sección 10). Falta confirmar variables de entorno completas en Vercel y si `@ricamo/web` tiene su propio proyecto.
 - **Email transaccional**: Resend (confirmación de pedidos, alertas de cuentas por pagar próximas a vencer, etc.).
@@ -114,10 +114,10 @@ Esquema completo y comentado en [`supabase/migrations/0001_init.sql`](./supabase
 
 - **Clientes / CRM**: `customers` (incluye `city`, agregada en `0003_crm.sql`), `marketing_campaigns` (campañas de email por segmento, también en `0003_crm.sql`).
 - **Catálogo / diseños**: `designs` (banco de diseños de Maria Jose, con estado y flag `published_to_ecommerce`), `design_requests` (solicitudes de personalizado desde la web, previas a WhatsApp), `products` + `product_variants` (catálogo de stock).
-- **Ventas**: `orders` (con `source`: `web_catalogo` / `web_personalizado` / `whatsapp` / `manual`), `order_items`, `deliveries`.
+- **Ventas**: `orders` (con `source`: `web_catalogo` / `web_personalizado` / `whatsapp` / `manual`; `shipping_type`/`shipping_payment_status` agregados en `0004_ventas_completas.sql`), `order_items` (tipo de prenda/categoría/color/talla como texto libre, técnica, tamaño de estampado, `cost_cop` para rentabilidad — también `0004`), `deliveries`.
 - **Inventario**: `inventory_items` (prendas en blanco), `inventory_movements`.
 - **Compras**: `suppliers` (tipo: `maquiladora` / `prendas` / `insumos` / `otro`), `purchases`, `purchase_items`.
-- **Finanzas**: `bank_accounts`, `transactions` (ingresos/salidas), `accounts_receivable`, `accounts_payable`.
+- **Finanzas**: `bank_accounts`, `transactions` (ingresos/salidas), `accounts_receivable`, `accounts_payable`, `print_size_prices` (costos de referencia de estampado, editables desde `apps/admin/configuracion` — `0005_precios_estampado.sql`).
 - **Logística**: `couriers` (domiciliarios).
 
 **Seguridad (RLS)**: todas las tablas tienen Row Level Security habilitado. Por defecto, todo está bloqueado para los roles `anon`/`authenticated`; el backend de ambas apps opera con la `service_role` key desde el servidor (Server Actions / route handlers), que ignora RLS. Las únicas excepciones son lecturas públicas explícitas de `products`, `product_variants` y `designs` cuando están publicados — es lo que necesita el ecommerce de cara al cliente. Ver la política final en el `.sql` antes de dar por cerrado este punto (está marcado como pendiente en el backlog).
@@ -129,6 +129,9 @@ Cliente navega `/catalogo` → agrega producto → checkout con la pasarela de p
 
 **Venta personalizada (cotización → WhatsApp):**
 Cliente completa el formulario en `/personalizados` (prenda, técnica, talla, cantidad, referencia) → se crea un `design_request` → se genera un link de WhatsApp con el resumen prellenado → el cliente continúa la conversación con Maria Jose como hoy → cuando ella cierra el trato, registra manualmente la venta en `apps/admin/ventas` (o se convierte el `design_request` en `order` desde el admin).
+
+**Registro manual de una venta (`apps/admin/ventas/nueva`):**
+Captura cliente (existente o nuevo, con cédula/dirección/ciudad/barrio), el ítem vendido (descripción, tipo de prenda/categoría/color/talla como texto libre con sugerencias vía `<datalist>` que crecen solas, cantidad, precio de venta), técnica y costo de producción (bordado con costo manual, o estampado con tamaño de referencia — precios conocidos solo para "punto corazón" y "media carta", el resto queda pendiente de confirmar con el negocio), pago (banco + monto recibido + abono/pago total) y envío (nacional/local, contraentrega/pagado, domiciliario). Si se recibió dinero, se crea automáticamente la `transaction` de ingreso en Bancos; si lo recibido queda por debajo del total, se crea también la `accounts_receivable` del saldo pendiente — el saldo se deriva (total − recibido), nunca se le pide al usuario que lo calcule. Soporta un solo ítem por venta por ahora (ver backlog). La carga automática de ventas hechas en el ecommerce todavía no existe — depende del catálogo y la pasarela de pago, ninguno construido — pero `order_items` ya tiene los mismos campos que usará ese flujo cuando se construya.
 
 **Publicación de un diseño al ecommerce (solo si el administrador lo aprueba):**
 Un diseño solo puede convertirse en producto vendible cuando su `status` es `aprobado` o `enviado_maquiladora` — nunca automático. Desde `apps/admin/disenos`, el administrador entra a `/disenos/[id]/publicar` (validado también en el servidor, no solo oculto en la UI) y llena nombre, tipo de prenda, precio y la primera talla → se crea el `product` (con `design_id`) + su `product_variant`, `products.is_published = true` y se sincroniza `designs.published_to_ecommerce`. Después, publicar/despublicar es un toggle que alterna `products.is_published` (fuente de verdad que ya lee el ecommerce).
@@ -143,7 +146,7 @@ Diseño aprobado por el cliente → `orders.status` pasa a `en_produccion` → s
 `apps/admin/lib/metrics.ts` clasifica cada cliente en `sin_compras` / `nuevo` / `recurrente` / `inactivo` (más de 90 días sin comprar) a partir de su historial en `orders` — se calcula en memoria, no hay columna ni vista en la base de datos para esto. `apps/admin/campanas` usa la misma clasificación para segmentar el envío: una campaña en borrador se manda por correo (Resend) a todos los clientes con email cuyo segmento calce, de forma secuencial (tope de 500 destinatarios).
 
 **Dashboard del negocio:**
-`apps/admin/app/page.tsx` calcula en memoria (sin vistas SQL) las métricas clave a partir de `orders`, `transactions`, `customers`, `accounts_receivable/payable` e `inventory_items`: ventas, ingresos/salidas de bancos, % de recompra, cuentas pendientes, top ciudades/clientes, ventas por origen y gastos por categoría.
+`apps/admin/app/page.tsx` calcula en memoria (sin vistas SQL) las métricas clave a partir de `orders`, `order_items`, `transactions`, `customers`, `accounts_receivable/payable` e `inventory_items`: ventas, ingresos/salidas de bancos, % de recompra, cuentas pendientes, top ciudades/clientes, ventas por origen, gastos por categoría, y **rentabilidad bruta/margen bruto** (precio de venta menos `order_items.cost_cop`, solo sobre ítems con costo ya registrado). Acepta un filtro opcional de periodo por query params (`?desde=YYYY-MM-DD&hasta=YYYY-MM-DD`, formulario GET sin JavaScript) que filtra ventas, transacciones e ítems a la vez; sin el filtro se ve todo el histórico.
 
 ## 7. Identidad de marca
 
@@ -156,7 +159,7 @@ Diseño aprobado por el cliente → `orders.status` pasa a `en_produccion` → s
 
 Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Ricamo/02%20Pendientes/Backlog.md). Los bloqueos más importantes que dependen del usuario:
 
-- **Aplicar `supabase/migrations/0003_crm.sql`** en el SQL Editor del Dashboard de Supabase — sin esto, Clientes/Campañas/Dashboard fallan en vivo (ver sección 4).
+- Costos de estampado faltantes: "carta", "oficio" y "tabloide" (solo se conocen "punto corazón" = $5.000 y "media carta" = $7.000). Ya se pueden cargar sin tocar código desde `/configuracion` en cuanto el negocio los confirme. También confirmar si son realmente 5 tamaños o si el negocio dijo "4 opciones" por error.
 - Confirmar que las variables de entorno de Vercel quedaron completas (`SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` como "Secret"/"Config" según corresponda) — el primer deploy falló por esto.
 - Confirmar si el WhatsApp del negocio para la web es 3216245987 (+57), visto en el Instagram.
 - Elegir pasarela de pago para Colombia (candidatas naturales: Wompi, MercadoPago, PayU).

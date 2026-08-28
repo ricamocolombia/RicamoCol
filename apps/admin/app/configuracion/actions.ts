@@ -1,0 +1,44 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { createServiceRoleClient } from "@ricamo/supabase/server";
+
+const VALID_PRINT_SIZES = [
+  "punto_corazon",
+  "media_carta",
+  "carta",
+  "oficio",
+  "tabloide",
+] as const;
+type PrintSize = (typeof VALID_PRINT_SIZES)[number];
+function isPrintSize(value: string): value is PrintSize {
+  return (VALID_PRINT_SIZES as readonly string[]).includes(value);
+}
+
+export async function actualizarCostoEstampado(formData: FormData) {
+  const printSizeRaw = String(formData.get("print_size") ?? "").trim();
+  const costRaw = String(formData.get("cost_cop") ?? "").trim();
+
+  if (!isPrintSize(printSizeRaw)) {
+    redirect(`/configuracion?error=${encodeURIComponent("Tamaño de estampado inválido")}`);
+  }
+  const printSize: PrintSize = printSizeRaw;
+
+  const cost = costRaw ? Number.parseInt(costRaw, 10) : null;
+  if (cost !== null && (!Number.isFinite(cost) || cost < 0)) {
+    redirect(`/configuracion?error=${encodeURIComponent("El costo debe ser un número válido")}`);
+  }
+
+  const supabase = createServiceRoleClient();
+
+  const { error } = await supabase
+    .from("print_size_prices")
+    .update({ cost_cop: cost })
+    .eq("print_size", printSize);
+
+  if (error) {
+    redirect(`/configuracion?error=${encodeURIComponent("No se pudo actualizar: " + error.message)}`);
+  }
+
+  redirect("/configuracion");
+}

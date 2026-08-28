@@ -18,6 +18,7 @@ const sections = [
   { href: "/proveedores", label: "Proveedores" },
   { href: "/domiciliarios", label: "Domiciliarios" },
   { href: "/disenos", label: "Diseños" },
+  { href: "/configuracion", label: "Configuración" },
 ];
 
 interface OrderRow {
@@ -40,6 +41,14 @@ interface TransactionRow {
   type: "ingreso" | "salida";
   amount_cop: number;
   category: string;
+  occurred_at: string;
+}
+
+interface ItemRow {
+  order_id: string;
+  quantity: number;
+  unit_price_cop: number;
+  cost_cop: number | null;
 }
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
@@ -121,7 +130,12 @@ function BarList({
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ desde?: string; hasta?: string }>;
+}) {
+  const { desde, hasta } = await searchParams;
   const supabase = createServiceRoleClient();
 
   const [
@@ -131,25 +145,58 @@ export default async function DashboardPage() {
     { data: receivableData },
     { data: payableData },
     { data: inventoryData },
+    { data: itemsData },
   ] = await Promise.all([
     supabase
       .from("orders")
       .select("id, customer_id, source, status, total_cop, payment_status, created_at"),
     supabase.from("customers").select("id, full_name, city"),
-    supabase.from("transactions").select("type, amount_cop, category"),
+    supabase.from("transactions").select("type, amount_cop, category, occurred_at"),
     supabase.from("accounts_receivable").select("amount_cop, status"),
     supabase.from("accounts_payable").select("amount_cop, status"),
     supabase.from("inventory_items").select("quantity_on_hand, reorder_level"),
+    supabase.from("order_items").select("order_id, quantity, unit_price_cop, cost_cop"),
   ]);
 
-  const orders = (ordersData ?? []) as unknown as OrderRow[];
+  const allOrders = (ordersData ?? []) as unknown as OrderRow[];
   const customers = (customersData ?? []) as unknown as CustomerRow[];
-  const transactions = (transactionsData ?? []) as unknown as TransactionRow[];
+  const allTransactions = (transactionsData ?? []) as unknown as TransactionRow[];
   const receivables = receivableData ?? [];
   const payables = payableData ?? [];
   const inventoryItems = inventoryData ?? [];
+  const allItems = (itemsData ?? []) as unknown as ItemRow[];
+
+  // Filtro de periodo (opcional, via ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD).
+  // Sin filtro se muestra todo el historico.
+  const desdeDate = desde ? new Date(`${desde}T00:00:00`) : null;
+  const hastaDate = hasta ? new Date(`${hasta}T23:59:59`) : null;
+  const inRange = (isoDate: string) => {
+    const d = new Date(isoDate);
+    if (desdeDate && d < desdeDate) return false;
+    if (hastaDate && d > hastaDate) return false;
+    return true;
+  };
+
+  const orders = allOrders.filter((o) => inRange(o.created_at));
+  const orderIds = new Set(orders.map((o) => o.id));
+  const items = allItems.filter((i) => orderIds.has(i.order_id));
+  const transactions = allTransactions.filter((t) => inRange(t.occurred_at));
 
   const customersById = new Map(customers.map((c) => [c.id, c]));
+
+  // Rentabilidad bruta: precio de venta menos costo de decoracion, solo
+  // sobre los items donde ya se registro el costo (no se asume 0 en los que
+  // faltan, para no inflar la cifra).
+  let rentabilidadBruta = 0;
+  let ingresosConCosto = 0;
+  let itemsConCosto = 0;
+  for (const item of items) {
+    if (item.cost_cop === null) continue;
+    itemsConCosto += 1;
+    ingresosConCosto += item.unit_price_cop * item.quantity;
+    rentabilidadBruta += (item.unit_price_cop - item.cost_cop) * item.quantity;
+  }
+  const margenBruto = ingresosConCosto > 0 ? (rentabilidadBruta / ingresosConCosto) * 100 : 0;
 
   // Ventas
   const ventasTotales = orders.length;
@@ -259,6 +306,44 @@ export default async function DashboardPage() {
         </form>
       </div>
 
+      <form className="flex flex-wrap items-end gap-3 mb-6 rounded-xl border border-neutral-200 bg-white p-4">
+        <div>
+          <label htmlFor="desde" className="block text-xs font-medium mb-1 text-neutral-500">
+            Desde
+          </label>
+          <input
+            id="desde"
+            name="desde"
+            type="date"
+            defaultValue={desde ?? ""}
+            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="hasta" className="block text-xs font-medium mb-1 text-neutral-500">
+            Hasta
+          </label>
+          <input
+            id="hasta"
+            name="hasta"
+            type="date"
+            defaultValue={hasta ?? ""}
+            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm"
+          />
+        </div>
+        <button
+          type="submit"
+          className="bg-ricamo-black text-white text-sm font-semibold rounded-lg px-4 py-1.5"
+        >
+          Filtrar
+        </button>
+        {(desde || hasta) && (
+          <Link href="/" className="text-sm text-neutral-500 hover:underline">
+            Ver todo el histórico
+          </Link>
+        )}
+      </form>
+
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide mb-3">
           Ventas
@@ -284,6 +369,29 @@ export default async function DashboardPage() {
           <Stat label="Salidas / gastos" value={currencyFormatter.format(salidasBancos)} />
           <Stat label="Balance neto" value={currencyFormatter.format(balanceBancos)} />
           <Stat label="Por cobrar / por pagar" value={`${currencyFormatter.format(cxcPendiente)} / ${currencyFormatter.format(cxpPendiente)}`} />
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide mb-3">
+          Rentabilidad
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <Stat
+            label="Rentabilidad bruta"
+            value={currencyFormatter.format(rentabilidadBruta)}
+            hint="precio de venta menos costo de bordado/estampado"
+          />
+          <Stat label="Margen bruto" value={`${margenBruto.toFixed(0)}%`} />
+          <Stat
+            label="Items con costo registrado"
+            value={`${itemsConCosto} de ${items.length}`}
+            hint={
+              items.length > itemsConCosto
+                ? "los items sin costo no se incluyen en el cálculo"
+                : undefined
+            }
+          />
         </div>
       </section>
 

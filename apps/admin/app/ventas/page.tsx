@@ -23,11 +23,19 @@ interface CustomerRow {
   id: string;
   full_name: string;
   phone: string | null;
+  city: string | null;
 }
 
 interface CourierRow {
   id: string;
   name: string;
+}
+
+interface ItemRow {
+  order_id: string;
+  quantity: number;
+  unit_price_cop: number;
+  cost_cop: number | null;
 }
 
 const SOURCE_LABELS: Record<OrderRow["source"], string> = {
@@ -86,24 +94,38 @@ export const dynamic = "force-dynamic";
 export default async function VentasPage() {
   const supabase = createServiceRoleClient();
 
-  const [{ data: ordersData, error: ordersError }, { data: customersData }, { data: couriersData }] =
-    await Promise.all([
-      supabase
-        .from("orders")
-        .select(
-          "id, customer_id, source, status, total_cop, payment_status, payment_method, courier_id, created_at"
-        )
-        .order("created_at", { ascending: false }),
-      supabase.from("customers").select("id, full_name, phone"),
-      supabase.from("couriers").select("id, name"),
-    ]);
+  const [
+    { data: ordersData, error: ordersError },
+    { data: customersData },
+    { data: couriersData },
+    { data: itemsData },
+  ] = await Promise.all([
+    supabase
+      .from("orders")
+      .select(
+        "id, customer_id, source, status, total_cop, payment_status, payment_method, courier_id, created_at"
+      )
+      .order("created_at", { ascending: false }),
+    supabase.from("customers").select("id, full_name, phone, city"),
+    supabase.from("couriers").select("id, name"),
+    supabase.from("order_items").select("order_id, quantity, unit_price_cop, cost_cop"),
+  ]);
 
   const orders = (ordersData ?? []) as unknown as OrderRow[];
   const customers = (customersData ?? []) as unknown as CustomerRow[];
   const couriers = (couriersData ?? []) as unknown as CourierRow[];
+  const items = (itemsData ?? []) as unknown as ItemRow[];
 
   const customersById = new Map(customers.map((c) => [c.id, c]));
   const couriersById = new Map(couriers.map((c) => [c.id, c]));
+
+  const profitByOrder = new Map<string, { profit: number; hasCost: boolean }>();
+  for (const item of items) {
+    const current = profitByOrder.get(item.order_id) ?? { profit: 0, hasCost: false };
+    current.profit += (item.unit_price_cop - (item.cost_cop ?? 0)) * item.quantity;
+    if (item.cost_cop !== null) current.hasCost = true;
+    profitByOrder.set(item.order_id, current);
+  }
 
   return (
     <main className="px-6 py-10">
@@ -134,13 +156,15 @@ export default async function VentasPage() {
             Todavía no hay ventas registradas.
           </p>
         ) : (
-          <table className="w-full text-sm min-w-[900px]">
+          <table className="w-full text-sm min-w-[1100px]">
             <thead>
               <tr className="border-b border-neutral-200 text-left text-neutral-500">
                 <th className="px-4 py-3 font-medium">Cliente</th>
+                <th className="px-4 py-3 font-medium">Ciudad</th>
                 <th className="px-4 py-3 font-medium">Origen</th>
                 <th className="px-4 py-3 font-medium">Estado</th>
                 <th className="px-4 py-3 font-medium">Total</th>
+                <th className="px-4 py-3 font-medium">Rentabilidad</th>
                 <th className="px-4 py-3 font-medium">Pago</th>
                 <th className="px-4 py-3 font-medium">Domiciliario</th>
                 <th className="px-4 py-3 font-medium">Fecha</th>
@@ -154,6 +178,7 @@ export default async function VentasPage() {
                 const courier = order.courier_id
                   ? couriersById.get(order.courier_id)
                   : undefined;
+                const profit = profitByOrder.get(order.id);
 
                 return (
                   <tr key={order.id} className="border-b border-neutral-100 last:border-0">
@@ -164,6 +189,9 @@ export default async function VentasPage() {
                           {customer.phone}
                         </div>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-neutral-600">
+                      {customer?.city ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-neutral-600">
                       {SOURCE_LABELS[order.source] ?? order.source}
@@ -177,6 +205,11 @@ export default async function VentasPage() {
                     </td>
                     <td className="px-4 py-3 font-medium">
                       {currencyFormatter.format(order.total_cop)}
+                    </td>
+                    <td className="px-4 py-3 text-neutral-600">
+                      {profit && profit.hasCost
+                        ? currencyFormatter.format(profit.profit)
+                        : "—"}
                     </td>
                     <td className="px-4 py-3">
                       <span

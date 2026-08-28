@@ -31,6 +31,9 @@ export interface Database {
           email: string | null;
           instagram_handle: string | null;
           city: string | null;
+          id_number: string | null;
+          address: string | null;
+          neighborhood: string | null;
           notes: string | null;
           created_at: Timestamp;
           updated_at: Timestamp;
@@ -42,6 +45,9 @@ export interface Database {
           email?: string | null;
           instagram_handle?: string | null;
           city?: string | null;
+          id_number?: string | null;
+          address?: string | null;
+          neighborhood?: string | null;
           notes?: string | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;
@@ -422,6 +428,8 @@ export interface Database {
             | "reembolsado";
           payment_method: string | null;
           courier_id: Uuid | null;
+          shipping_type: "nacional" | "local" | null;
+          shipping_payment_status: "contraentrega" | "pagado" | null;
           notes: string | null;
           created_at: Timestamp;
           updated_at: Timestamp;
@@ -446,6 +454,8 @@ export interface Database {
             | "reembolsado";
           payment_method?: string | null;
           courier_id?: Uuid | null;
+          shipping_type?: "nacional" | "local" | null;
+          shipping_payment_status?: "contraentrega" | "pagado" | null;
           notes?: string | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;
@@ -463,6 +473,19 @@ export interface Database {
           description: string | null;
           quantity: number;
           unit_price_cop: number;
+          garment_type: string | null;
+          design_category: string | null;
+          color: string | null;
+          size: string | null;
+          technique: "bordado" | "estampado" | null;
+          print_size:
+            | "punto_corazon"
+            | "media_carta"
+            | "carta"
+            | "oficio"
+            | "tabloide"
+            | null;
+          cost_cop: number | null;
           created_at: Timestamp;
         };
         Insert: {
@@ -473,6 +496,19 @@ export interface Database {
           description?: string | null;
           quantity?: number;
           unit_price_cop: number;
+          garment_type?: string | null;
+          design_category?: string | null;
+          color?: string | null;
+          size?: string | null;
+          technique?: "bordado" | "estampado" | null;
+          print_size?:
+            | "punto_corazon"
+            | "media_carta"
+            | "carta"
+            | "oficio"
+            | "tabloide"
+            | null;
+          cost_cop?: number | null;
           created_at?: Timestamp;
         };
         Update: Partial<
@@ -608,6 +644,33 @@ export interface Database {
         };
         Update: Partial<
           Database["public"]["Tables"]["accounts_payable"]["Insert"]
+        >;
+        Relationships: [];
+      };
+
+      print_size_prices: {
+        Row: {
+          print_size:
+            | "punto_corazon"
+            | "media_carta"
+            | "carta"
+            | "oficio"
+            | "tabloide";
+          cost_cop: number | null;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          print_size:
+            | "punto_corazon"
+            | "media_carta"
+            | "carta"
+            | "oficio"
+            | "tabloide";
+          cost_cop?: number | null;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["print_size_prices"]["Insert"]
         >;
         Relationships: [];
       };

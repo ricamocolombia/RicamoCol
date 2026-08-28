@@ -17,5 +17,8 @@ Un repo en GitHub con `apps/web` (ecommerce), `apps/admin` (gestión), `packages
 ## 2026-08-27 — Stack técnico
 GitHub (código) + Supabase (base de datos/auth/storage) + Vercel (despliegues) + Resend (emails transaccionales). Next.js (App Router) + TypeScript + Tailwind en ambas apps, pnpm + Turborepo para el monorepo.
 
+## 2026-08-28 — Campos de producto en Ventas: una opción por campo, listas abiertas
+Tipo de prenda, categoría de diseño, color y talla en un ítem de venta son campos de una sola opción cada uno (no selección múltiple real) — si se necesitan combinaciones distintas, se agrega otro ítem. Las listas de opciones (tipo de prenda, categoría) son abiertas: Maria Jose puede escribir un valor nuevo sobre la marcha y queda disponible como sugerencia la próxima vez, sin que haya que tocar código. Implementado con `<datalist>` de HTML, sin JavaScript de cliente.
+
 ---
 Ver también: [[Negocio]]
