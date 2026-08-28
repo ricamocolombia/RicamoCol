@@ -23,13 +23,19 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [ ] Definir políticas RLS finales (hoy solo hay lectura pública de `products`/`designs` publicados).
 
 ## Ecommerce (apps/web)
-- [ ] Evaluar si `products`/`designs` necesitan un campo de categoría/colección (ej. "camisetas de pareja", "orgullo regional/viajes", "humor") — visto como líneas de producto reales en el Instagram @ricamo_col, no modelado todavía en el esquema.
-- [ ] Construir catálogo real (listado + detalle de producto) conectado a Supabase.
-- [ ] Construir formulario de cotización personalizada → WhatsApp.
-- [ ] Integrar pasarela de pago para el catálogo.
-- [ ] Diseñar la página de marca personal de Maria Jose.
+- [x] **Rediseño completo del ecommerce público construido y verificado en vivo** (2026-08-28, a pedido del usuario) — "diseñado bajo la metodología de una tienda de ropa", imagen de las prendas al frente, énfasis en personalización, segmento de Maria Jose. Detalle en `01 Progreso/2026-08-28.md`. Resumen:
+  - Sistema de diseño: tipografía Fredoka (títulos, eco del logo hecho a mano) + Nunito (cuerpo), vía `next/font/google`; paleta extendida con crudo/hueso (`ricamo-cream`/`ricamo-bone`) para que combine con las prendas oversized en crudo que ya usa la marca en Instagram, manteniendo amarillo/negro/rojo del logo como acentos.
+  - `Header`/`Footer` nuevos (menú móvil sin JavaScript con `<details>`/`<summary>`), `ProductCard`, `MariaJoseSpotlight` reutilizable.
+  - Home rediseñada: hero, tiles de Bordado/Estampado, destacados (datos reales de `products`+`designs`, con estado vacío elegante mientras no haya productos publicados), "así de simple" (3 pasos), segmento de Maria Jose.
+  - `/catalogo`: grid real con filtros por técnica y tipo de prenda (query params, sin JavaScript).
+  - `/catalogo/[slug]` (nueva ruta): detalle de producto con imagen grande, tallas/colores disponibles, y CTA "Pedir por WhatsApp" con mensaje prellenado (no hay pasarela de pago todavía, así que el cierre sigue siendo por WhatsApp, consistente con el checkout híbrido ya decidido).
+  - `/personalizados`: formulario real (antes placeholder) que crea el cliente (o lo reusa por teléfono) y el `design_request` en Supabase, y redirige directo a WhatsApp con el resumen — ya no es un TODO.
+  - `/sobre-maria-jose`: página de marca personal ampliada (historia + CTA), reutilizando `MariaJoseSpotlight`.
+  - **No hay foto real de Maria Jose ni fotografía de producto todavía** — se dejaron placeholders de marca cuidados (no imágenes rotas ni genéricas) con comentarios `TODO` en el código, listos para reemplazar en cuanto el negocio las entregue.
+- [ ] Evaluar si `products`/`designs` necesitan un campo de categoría/colección (ej. "camisetas de pareja", "orgullo regional/viajes", "humor") — visto como líneas de producto reales en el Instagram @ricamo_col, no modelado todavía en el esquema. Los filtros de `/catalogo` hoy solo son técnica y tipo de prenda.
+- [ ] Integrar pasarela de pago para el catálogo (Wompi/MercadoPago/PayU, sin elegir todavía) — hoy el CTA de compra en `/catalogo/[slug]` va a WhatsApp.
 - [x] Logo real conectado en header (`app/layout.tsx`) y favicon (`app/icon.png`) del ecommerce.
-- [ ] Definir tipografía de marca (hoy se usa la fuente por defecto de Tailwind, no la del logo).
+- [x] Tipografía de marca definida (Fredoka + Nunito, 2026-08-28).
 
 ## App admin (apps/admin)
 - [x] Autenticación (login) para la app admin vía Supabase Auth (2026-08-27) — middleware protege todas las rutas, `/login` con email+password, logout en el dashboard. Primera cuenta creada (`juancamilo965@gmail.com`) con `pnpm create-admin-user <email> <password>` (usa la service_role key, sin flujo de auto-registro).
@@ -61,8 +67,8 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [x] **Cuentas por pagar automáticas a los proveedores de producción** (2026-08-28, a pedido del usuario) — cada venta con técnica (bordado/estampado) y costo genera automáticamente una `accounts_payable` al proveedor correspondiente, configurado en `/configuracion` → "Proveedores de producción" (sin esto configurado, la venta se registra igual pero no genera la cuenta por pagar). `/cuentas-por-pagar` se reescribió: agrupa las pendientes por proveedor con casillas de selección múltiple, y un formulario por proveedor para confirmar el pago (banco de salida + monto pagado) — marca las seleccionadas como pagadas y registra la salida en Bancos en un solo movimiento. Se agregó una sección de historial (pagadas/anuladas) separada. Pendiente de verificar en vivo hasta que se aplique `0007_pagos_produccion.sql`.
 
 ## Integración
-- [ ] Webhook/Server Action que registre automáticamente en `orders` cada venta hecha desde el ecommerce.
-- [ ] Publicar diseño desde admin → visible en catálogo web (toggle `published_to_ecommerce`).
+- [ ] Webhook/Server Action que registre automáticamente en `orders` cada venta hecha desde el ecommerce — sigue pendiente de la pasarela de pago (sin eso no hay "venta hecha en el ecommerce" que registrar, hoy el catálogo cierra por WhatsApp).
+- [x] **Publicar diseño desde admin → visible en catálogo web, verificado en vivo** (2026-08-28) — se probó de punta a punta: un producto marcado `is_published = true` en `apps/admin/disenos/[id]/publicar` aparece de inmediato en `/catalogo` del ecommerce (lectura pública con `anon` key vía RLS), sin deploy ni intervención de código.
 - [ ] Notificaciones por email (Resend): confirmación de pedido, alertas de cuentas por pagar próximas a vencer.
 
 ## Infraestructura

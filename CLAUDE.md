@@ -79,12 +79,14 @@ Registro completo con fechas y motivos en [`vault/Ricamo/00 Contexto/Decisiones.
 ```
 apps/
   web/                  ecommerce (puerto 3000 en dev)
+    components/           Header, Footer, ProductCard, MariaJoseSpotlight (no son rutas)
+    lib/                   format.ts (moneda/labels), whatsapp.ts (link con mensaje prellenado)
     app/
-      page.tsx           home (marca personal + accesos a catalogo/personalizados)
-      catalogo/           listado de productos de stock
-      personalizados/     cotizador -> WhatsApp
-      sobre-maria-jose/   pagina de marca personal
-      api/orders/         endpoint que registra ventas del ecommerce en Supabase
+      page.tsx           home: hero, tiles tecnica, destacados (datos reales), como-funciona, Maria Jose
+      catalogo/           grid real filtrable (tecnica/prenda) + [slug]/ detalle de producto
+      personalizados/     formulario real -> crea customer + design_request -> WhatsApp
+      sobre-maria-jose/   pagina de marca personal (historia + CTA)
+      api/orders/         endpoint que registra ventas del ecommerce en Supabase (aun TODO, depende de pasarela de pago)
   admin/                gestion del negocio (puerto 3001 en dev)
     lib/metrics.ts        segmentacion de clientes + formateadores, compartido entre modulos (no es una ruta)
     app/
@@ -127,11 +129,11 @@ Esquema completo y comentado en [`supabase/migrations/0001_init.sql`](./supabase
 
 ## 6. Flujos clave
 
-**Venta de catálogo (con pago en línea):**
-Cliente navega `/catalogo` → agrega producto → checkout con la pasarela de pagos → `POST /api/orders` crea `order` (`source = web_catalogo`) + `order_items` + `transaction` de ingreso → Resend envía confirmación → visible de inmediato en `apps/admin/ventas`.
+**Venta de catálogo (hoy vía WhatsApp, pago en línea pendiente):**
+Cliente navega `/catalogo` (grid real, filtrable por técnica/tipo de prenda) → entra a `/catalogo/[slug]` → botón "Pedir por WhatsApp" abre un chat con el nombre/precio/tallas del producto prellenado → Maria Jose cierra la venta por WhatsApp como hoy → la registra manualmente en `apps/admin/ventas`. Cuando exista pasarela de pago, ese botón se reemplaza por un checkout real que llame `POST /api/orders` (hoy un stub) para crear `order` (`source = web_catalogo`) + `order_items` + `transaction` automáticamente.
 
 **Venta personalizada (cotización → WhatsApp):**
-Cliente completa el formulario en `/personalizados` (prenda, técnica, talla, cantidad, referencia) → se crea un `design_request` → se genera un link de WhatsApp con el resumen prellenado → el cliente continúa la conversación con Maria Jose como hoy → cuando ella cierra el trato, registra manualmente la venta en `apps/admin/ventas` (o se convierte el `design_request` en `order` desde el admin).
+Cliente completa el formulario real en `/personalizados` (datos de contacto, prenda, técnica, talla, cantidad, referencia) → la Server Action busca/crea el `customer` por teléfono y crea un `design_request` en Supabase (queda visible para el admin) → `redirect()` externo directo a WhatsApp con el resumen prellenado → el cliente continúa la conversación con Maria Jose como hoy → cuando ella cierra el trato, registra manualmente la venta en `apps/admin/ventas` (o se convierte el `design_request` en `order` desde el admin).
 
 **Registro manual de una venta (`apps/admin/ventas/nueva`):**
 Captura cliente (existente o nuevo, con cédula/dirección/ciudad/barrio), el ítem vendido (descripción, tipo de prenda/categoría/color/talla como texto libre con sugerencias vía `<datalist>` que crecen solas, cantidad, precio de venta), técnica y costo de producción (bordado con costo manual, o estampado con tamaño de referencia — precios conocidos solo para "punto corazón" y "media carta", el resto queda pendiente de confirmar con el negocio), pago (banco + monto recibido + abono/pago total) y envío (nacional/local, contraentrega/pagado, domiciliario). Si se recibió dinero, se crea automáticamente la `transaction` de ingreso en Bancos; si lo recibido queda por debajo del total, se crea también la `accounts_receivable` del saldo pendiente — el saldo se deriva (total − recibido), nunca se le pide al usuario que lo calcule. Soporta un solo ítem por venta por ahora (ver backlog). La carga automática de ventas hechas en el ecommerce todavía no existe — depende del catálogo y la pasarela de pago, ninguno construido — pero `order_items` ya tiene los mismos campos que usará ese flujo cuando se construya.
@@ -165,7 +167,9 @@ Si una venta trae técnica (bordado/estampado) y costo de decoración, `apps/adm
 - Logo recibido el 2026-08-27: isotipo de una carita feliz dibujada a mano + wordmark "Ricamo", con el tagline **"Lo creas, lo llevas"**. Hay dos versiones: fondo negro con logo amarillo, y fondo amarillo con logo negro (útiles para contraste según el fondo).
 - Colores de marca: **amarillo, negro y rojo**. No existe un manual de marca formal — el amarillo (`#F5C518`) y el negro (`#0A0A0A`) en `packages/ui/src/tokens.ts` y en los `tailwind.config.ts` de cada app se tomaron a ojo del logo y quedan como el estándar de facto del proyecto. El rojo (`#D7263D`) sigue siendo un acento provisional: no aparece en el isotipo, está pensado como color de refuerzo (CTAs, badges) y falta definirlo con el negocio.
 - Archivos del logo ya están en el repo (`apps/web/public/brand/` y `apps/admin/public/brand/`, ver el `LEEME.md` de cada carpeta) y conectados: `logo-transparente-negro.png` en el header de ambas apps (`app/layout.tsx`), `logo-fondo-amarillo.png` como favicon (`app/icon.png`) de ambas apps.
-- Maria Jose Ruiz es la cara visible de la marca. La home del ecommerce y la página `/sobre-maria-jose` deben construirse pensando en marca personal (bio, redes sociales, historia, fotos), no solo como una tienda genérica.
+- **Tipografía** (definida 2026-08-28, solo en `apps/web` — el ecommerce, no el admin): **Fredoka** para títulos + **Nunito** para cuerpo, cargadas vía `next/font/google` en `apps/web/app/layout.tsx`. Elegidas por redondas/amigables, hacen eco del isotipo dibujado a mano sin sentirse infantiles. `tailwind.config.ts` las expone como `font-display`/`font-sans`.
+- **Paleta extendida** (`apps/web/tailwind.config.ts`): `ricamo-cream` (`#FAF6EC`) y `ricamo-bone` (`#F1EADA`) como fondo/superficie, para que combine con las prendas oversized en crudo/blanco que ya usa la marca en Instagram. Amarillo/negro/rojo del logo quedan como acentos (CTAs, badges), no como fondo.
+- Maria Jose Ruiz es la cara visible de la marca — la home del ecommerce (sección "Destacados" + `MariaJoseSpotlight` compacto) y `/sobre-maria-jose` (versión completa) ya la muestran como marca personal. **Falta una foto real de ella** — hoy hay un placeholder de marca marcado con `TODO` en `apps/web/components/MariaJoseSpotlight.tsx`.
 
 ## 8. Pendientes / decisiones abiertas
 
@@ -187,7 +191,7 @@ Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Rica
 1. **Fundación** (hecho el 2026-08-27): estructura del monorepo, esquema de base de datos inicial, `CLAUDE.md`, memoria del proyecto en Obsidian.
 2. **Conexión de infraestructura** (hecho el 2026-08-27, falta Resend): proyecto real en Supabase conectado y con la migración aplicada, repo en GitHub con el primer push, `pnpm install`/`pnpm build` verificados en local.
 3. **App admin — núcleo operativo** (construido y verificado en vivo el 2026-08-27): autenticación con Supabase Auth, los 9 módulos operativos (ventas, compras, inventario, cuentas por cobrar y pagar, bancos, proveedores, domiciliarios, diseños), más Clientes/CRM, Campañas de marketing, Dashboard con métricas reales, y la conexión Diseño→Producto con aprobación explícita del administrador. Pendiente de verificar en vivo lo último (falta aplicar `0003_crm.sql`). Falta: editar/eliminar registros existentes en varios módulos, líneas múltiples por venta/compra, gestión de usuarios del panel. Detalle completo en `vault/Ricamo/01 Progreso/2026-08-27.md` y en el backlog.
-4. **Ecommerce — catálogo y marca personal**: catálogo real conectado a Supabase, página de Maria Jose, identidad visual definitiva (logo).
+4. **Ecommerce — catálogo y marca personal** (construido y verificado en vivo el 2026-08-28): home, `/catalogo` + `/catalogo/[slug]`, `/personalizados` real, `/sobre-maria-jose` ampliada, identidad visual definitiva (logo + tipografía Fredoka/Nunito + paleta crudo/hueso). Falta: foto real de Maria Jose y fotografía de producto (placeholders marcados con `TODO`), pasarela de pago, y evaluar categorías/colecciones para el catálogo.
 5. **Integración**: registro automático de ventas web → admin, publicación de diseños admin → ecommerce, checkout con pasarela de pagos para el catálogo.
 6. **Pulido**: notificaciones por email (confirmaciones, alertas de cartera), SEO, despliegue final en Vercel con dominio propio.
 
@@ -210,7 +214,7 @@ Ver `apps/web/.env.example` y `apps/admin/.env.example` para el detalle completo
 
 ## 12. Notas para Claude Code en este repo
 
-- El ecommerce (`apps/web`) sigue siendo casi todo placeholders con `TODO`. El admin (`apps/admin`) ya tiene 12 módulos con lógica real (ver sección 9) — no asumas que todavía es solo scaffold ahí. Antes de "arreglar" algo, confirmar si es un placeholder intencional documentado aquí o un bug real.
+- El ecommerce (`apps/web`) ya tiene home, catálogo, detalle de producto, personalizados y sobre-maria-jose con lógica real (2026-08-28) — ya no es scaffold. Lo que sigue siendo placeholder a propósito: las fotos (marca) y el checkout con pago en línea (WhatsApp por ahora). El admin (`apps/admin`) tiene 12 módulos con lógica real (ver sección 9). Antes de "arreglar" algo, confirmar si es un placeholder intencional documentado aquí (o marcado `TODO` en el código) o un bug real.
 - `pnpm install` y `pnpm build` ya se verificaron (2026-08-27) — ambas apps compilan. Si algo no compila después de un cambio, es una regresión real, no un problema preexistente del scaffold.
 - Git está inicializado, con `origin` en GitHub (`ricamocolombia/RicamoCol`) y el primer commit ya empujado a `main` (2026-08-27). No commitear ni hacer push sin que el usuario lo pida explícitamente en esa sesión — es una instrucción general del entorno, no específica de este proyecto, pero aplica con fuerza aquí porque el remoto ya es real.
 - Los archivos `.env.local` de ambas apps tienen credenciales reales de Supabase (incluida la `service_role` key). Nunca imprimirlas en la bóveda de Obsidian, en `CLAUDE.md` ni en ningún archivo que se vaya a commitear — viven solo en `.env.local` (gitignored).

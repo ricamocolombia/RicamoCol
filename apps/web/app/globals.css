@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    font-family: var(--font-sans), sans-serif;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display), sans-serif;
+  }
+}
+
+@layer utilities {
+  /* Subrayado tipo marcador, a mano alzada -- eco del trazo del logo, usado
+     con moderacion en titulos y enlaces clave. */
+  .marker-underline {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-size: 100% 0.5em;
+    background-repeat: no-repeat;
+    background-position: 0 88%;
+  }
+}
