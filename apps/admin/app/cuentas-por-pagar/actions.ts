@@ -53,24 +53,61 @@ export async function crearCuentaPorPagar(formData: FormData) {
   redirect("/cuentas-por-pagar");
 }
 
-export async function marcarCuentaPorPagarPagada(formData: FormData) {
-  const id = String(formData.get("id") ?? "").trim();
-  if (!id) {
+// Paga en un solo movimiento una o varias cuentas por pagar seleccionadas
+// (normalmente todas del mismo proveedor, agrupadas en la UI). Registra el
+// pago como una transaccion de salida en Bancos y marca cada cuenta
+// seleccionada como pagada. El monto pagado se guarda tal cual lo confirme
+// el usuario -- no se exige que coincida centavo a centavo con la suma de
+// lo seleccionado.
+export async function registrarPagoProveedor(formData: FormData) {
+  const selectedIds = formData.getAll("selected_ids").map((v) => String(v)).filter(Boolean);
+  const bankAccountId = String(formData.get("bank_account_id") ?? "").trim();
+  const amountRaw = String(formData.get("amount_paid_cop") ?? "").trim();
+  const supplierLabel = String(formData.get("supplier_label") ?? "proveedor").trim();
+
+  if (selectedIds.length === 0) {
     redirect(
-      `/cuentas-por-pagar?error=${encodeURIComponent("Id de cuenta por pagar invalido")}`
+      `/cuentas-por-pagar?error=${encodeURIComponent("Selecciona al menos una cuenta por pagar")}`
+    );
+  }
+  if (!bankAccountId) {
+    redirect(`/cuentas-por-pagar?error=${encodeURIComponent("Elige de qué banco sale el pago")}`);
+  }
+  const amount = Number.parseInt(amountRaw, 10);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    redirect(
+      `/cuentas-por-pagar?error=${encodeURIComponent("El monto pagado debe ser un número mayor a 0")}`
     );
   }
 
   const supabase = createServiceRoleClient();
-  const { error } = await supabase
+
+  const { error: updateError } = await supabase
     .from("accounts_payable")
     .update({ status: "pagado" })
-    .eq("id", id);
+    .in("id", selectedIds);
 
-  if (error) {
+  if (updateError) {
     redirect(
       `/cuentas-por-pagar?error=${encodeURIComponent(
-        "No se pudo marcar como pagada: " + error.message
+        "No se pudo marcar como pagadas: " + updateError.message
+      )}`
+    );
+  }
+
+  const { error: transactionError } = await supabase.from("transactions").insert({
+    bank_account_id: bankAccountId,
+    type: "salida",
+    category: "Pago a proveedor",
+    amount_cop: amount,
+    description: `Pago a ${supplierLabel} — ${selectedIds.length} cuenta(s) por pagar`,
+  });
+
+  if (transactionError) {
+    redirect(
+      `/cuentas-por-pagar?error=${encodeURIComponent(
+        "Las cuentas quedaron marcadas como pagadas, pero no se pudo registrar la salida en Bancos: " +
+          transactionError.message
       )}`
     );
   }

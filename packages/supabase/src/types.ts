@@ -666,6 +666,7 @@ export interface Database {
           id: Uuid;
           supplier_id: Uuid | null;
           purchase_id: Uuid | null;
+          order_id: Uuid | null;
           amount_cop: number;
           due_date: DateOnly | null;
           status: "pendiente" | "pagado" | "vencido" | "anulado";
@@ -677,6 +678,7 @@ export interface Database {
           id?: Uuid;
           supplier_id?: Uuid | null;
           purchase_id?: Uuid | null;
+          order_id?: Uuid | null;
           amount_cop: number;
           due_date?: DateOnly | null;
           status?: "pendiente" | "pagado" | "vencido" | "anulado";

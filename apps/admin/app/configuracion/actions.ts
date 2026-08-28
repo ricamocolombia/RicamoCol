@@ -60,3 +60,25 @@ export async function actualizarEmailAlertas(formData: FormData) {
 
   redirect("/configuracion");
 }
+
+export async function actualizarProveedoresProduccion(formData: FormData) {
+  const supplierEstampado = String(formData.get("supplier_estampado_id") ?? "").trim();
+  const supplierBordado = String(formData.get("supplier_bordado_id") ?? "").trim();
+
+  const supabase = createServiceRoleClient();
+
+  const { error } = await supabase.from("app_settings").upsert([
+    { key: "supplier_estampado_id", value: supplierEstampado || null },
+    { key: "supplier_bordado_id", value: supplierBordado || null },
+  ]);
+
+  if (error) {
+    redirect(
+      `/configuracion?error=${encodeURIComponent(
+        "No se pudo guardar el proveedor de producción: " + error.message
+      )}`
+    );
+  }
+
+  redirect("/configuracion");
+}

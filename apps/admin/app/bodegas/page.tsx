@@ -1,5 +1,5 @@
 import { createServiceRoleClient } from "@ricamo/supabase/server";
-import { crearBodega, toggleBodegaActiva } from "./actions";
+import { actualizarBodega, crearBodega, toggleBodegaActiva } from "./actions";
 
 // Datos en vivo del negocio: nunca prerenderizar de forma estatica.
 export const dynamic = "force-dynamic";
@@ -35,7 +35,6 @@ export default async function BodegasPage({
 
   const warehouses = (warehousesData ?? []) as unknown as WarehouseRow[];
   const suppliers = (suppliersData ?? []) as unknown as SupplierRow[];
-  const suppliersById = new Map(suppliers.map((s) => [s.id, s]));
 
   return (
     <main className="px-6 py-10">
@@ -64,41 +63,74 @@ export default async function BodegasPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="px-4 py-3 font-medium">Bodega</th>
-                <th className="px-4 py-3 font-medium">Proveedor asociado</th>
+                <th className="px-4 py-3 font-medium">Bodega y proveedor asociado</th>
                 <th className="px-4 py-3 font-medium">Estado</th>
-                <th className="px-4 py-3 font-medium"></th>
               </tr>
             </thead>
             <tbody>
               {warehouses.map((w) => (
-                <tr key={w.id} className="border-b border-neutral-100 last:border-0">
-                  <td className="px-4 py-3 font-medium">{w.name}</td>
-                  <td className="px-4 py-3 text-neutral-600">
-                    {w.supplier_id ? suppliersById.get(w.supplier_id)?.name ?? "—" : "—"}
-                  </td>
+                <tr key={w.id} className="border-b border-neutral-100 last:border-0 align-top">
                   <td className="px-4 py-3">
-                    {w.is_active ? (
-                      <span className="inline-block rounded-full bg-green-100 text-green-700 text-xs font-medium px-2 py-1">
-                        Activa
-                      </span>
-                    ) : (
-                      <span className="inline-block rounded-full bg-neutral-100 text-neutral-500 text-xs font-medium px-2 py-1">
-                        Inactiva
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <form action={toggleBodegaActiva}>
+                    <form
+                      action={actualizarBodega}
+                      className="flex flex-wrap items-end gap-2"
+                    >
                       <input type="hidden" name="id" value={w.id} />
-                      <input type="hidden" name="is_active" value={String(w.is_active)} />
+                      <div>
+                        <label className="block text-xs text-neutral-500 mb-1">Nombre</label>
+                        <input
+                          name="name"
+                          type="text"
+                          required
+                          defaultValue={w.name}
+                          className="rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-neutral-500 mb-1">Proveedor</label>
+                        <select
+                          name="supplier_id"
+                          defaultValue={w.supplier_id ?? ""}
+                          className="rounded-lg border border-neutral-300 px-2 py-1.5 text-sm bg-white"
+                        >
+                          <option value="">— Ninguno —</option>
+                          {suppliers.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <button
                         type="submit"
-                        className="text-xs text-neutral-500 hover:text-ricamo-black underline underline-offset-2"
+                        className="text-xs font-semibold text-ricamo-black bg-ricamo-yellow rounded-lg px-3 py-1.5 whitespace-nowrap"
                       >
-                        {w.is_active ? "Desactivar" : "Activar"}
+                        Guardar
                       </button>
                     </form>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {w.is_active ? (
+                        <span className="inline-block rounded-full bg-green-100 text-green-700 text-xs font-medium px-2 py-1">
+                          Activa
+                        </span>
+                      ) : (
+                        <span className="inline-block rounded-full bg-neutral-100 text-neutral-500 text-xs font-medium px-2 py-1">
+                          Inactiva
+                        </span>
+                      )}
+                      <form action={toggleBodegaActiva}>
+                        <input type="hidden" name="id" value={w.id} />
+                        <input type="hidden" name="is_active" value={String(w.is_active)} />
+                        <button
+                          type="submit"
+                          className="text-xs text-neutral-500 hover:text-ricamo-black underline underline-offset-2 whitespace-nowrap"
+                        >
+                          {w.is_active ? "Desactivar" : "Activar"}
+                        </button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
               ))}

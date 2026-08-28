@@ -245,6 +245,38 @@ export async function crearVenta(formData: FormData) {
     );
   }
 
+  // Cuenta por pagar automatica al proveedor de produccion (estampado o
+  // bordado), segun lo configurado en Configuracion. Sin proveedor
+  // configurado para esa tecnica, se omite en silencio -- no bloquea la
+  // venta, pero el pago a ese proveedor no queda registrado hasta que se
+  // configure.
+  if (technique && cost !== null && cost > 0) {
+    const settingKey = technique === "estampado" ? "supplier_estampado_id" : "supplier_bordado_id";
+    const { data: settingRow } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", settingKey)
+      .maybeSingle();
+
+    const productionSupplierId = settingRow?.value;
+
+    if (productionSupplierId) {
+      const { error: payableError } = await supabase.from("accounts_payable").insert({
+        supplier_id: productionSupplierId,
+        order_id: orderId,
+        amount_cop: cost * itemQuantity,
+        notes: `${technique === "estampado" ? "Estampado" : "Bordado"} — ${itemDescription}`,
+      });
+
+      if (payableError) {
+        fail(
+          "La venta se creó pero no se pudo cargar la cuenta por pagar al proveedor de producción: " +
+            payableError.message
+        );
+      }
+    }
+  }
+
   // Pago: si se recibio dinero, queda un movimiento de ingreso en Bancos. Si
   // lo recibido es menos que el total, el saldo pendiente se registra solo
   // como cuenta por cobrar -- sin duplicar la captura manual de ese dato.
