@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { buildStockAlertEmail } from "@ricamo/ui";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 
 interface InventoryItemRow {
@@ -89,34 +90,27 @@ export async function checkAndSendStockAlerts(): Promise<StockAlertResult> {
     byWarehouse.set(key, list);
   }
 
-  const lines: string[] = [
-    `Alerta de inventario bajo — Ricamo (${new Date().toLocaleDateString("es-CO")})`,
-    "",
-  ];
-  for (const [warehouseName, warehouseItems] of byWarehouse) {
-    lines.push(`Bodega: ${warehouseName}`);
-    for (const item of warehouseItems) {
-      const detail = [
-        item.garment_type,
-        item.size ? `talla ${item.size}` : null,
-        item.color ?? null,
-      ]
+  const groups = [...byWarehouse.entries()].map(([warehouseName, warehouseItems]) => ({
+    warehouseName,
+    items: warehouseItems.map((item) => ({
+      name: item.name,
+      detail: [item.garment_type, item.size ? `talla ${item.size}` : null, item.color ?? null]
         .filter(Boolean)
-        .join(", ");
-      lines.push(
-        `  - ${item.name} (${detail}): quedan ${item.quantity_on_hand}, nivel mínimo ${item.reorder_level}`
-      );
-    }
-    lines.push("");
-  }
-  lines.push("Actualiza el nivel mínimo o silencia la alerta de un ítem desde el panel, en Inventario.");
+        .join(", "),
+      quantityOnHand: item.quantity_on_hand,
+      reorderLevel: item.reorder_level,
+    })),
+  }));
+
+  const email = buildStockAlertEmail({ groups, generatedAt: new Date() });
 
   const resend = new Resend(apiKey);
   await resend.emails.send({
     from: fromEmail,
     to: alertEmail,
-    subject: `Ricamo — ${lowStock.length} ítem(s) con stock bajo`,
-    text: lines.join("\n"),
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
   });
 
   return { sent: true, lowStockCount: lowStock.length };

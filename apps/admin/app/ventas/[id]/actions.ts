@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
+import { sendOrderStatusEmail } from "../../../lib/orderEmails";
 
 const VALID_STATUSES = [
   "pendiente",
@@ -66,6 +67,12 @@ export async function updateOrderStatus(formData: FormData) {
 
   if (error) {
     fail(id, "No se pudo actualizar el estado: " + error.message);
+  }
+
+  // "pendiente" solo se usa para reactivar un pedido cancelado -- es una
+  // correccion interna del admin, no un hito que le avisemos al cliente.
+  if (statusRaw !== "pendiente") {
+    await sendOrderStatusEmail(id, statusRaw);
   }
 
   redirect(`/ventas/${id}`);

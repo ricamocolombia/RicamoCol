@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
+import { sendOrderStatusEmail } from "../../../lib/orderEmails";
 
 const VALID_SOURCES = [
   "web_catalogo",
@@ -316,6 +317,8 @@ export async function crearVenta(formData: FormData) {
       }
     }
   }
+
+  await sendOrderStatusEmail(orderId, "creado");
 
   redirect("/ventas");
 }

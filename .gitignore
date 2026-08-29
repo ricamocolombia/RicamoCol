@@ -37,3 +37,6 @@ Thumbs.db
 
 # Estado local de Claude Code (tareas programadas, etc.)
 .claude/
+
+# Salida local del MCP de Playwright (logs de consola, snapshots de pagina)
+.playwright-mcp/

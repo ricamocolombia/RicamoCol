@@ -7,7 +7,8 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [ ] Confirmar si el WhatsApp del negocio es 3216245987 (+57), visto en el Instagram @ricamo_col.
 - [ ] Elegir pasarela de pago para Colombia (Wompi / MercadoPago / PayU).
 - [ ] Dominio del sitio.
-- [x] Proyecto de Supabase creado (2026-08-27): `https://jeebrphbdcuhfkyhicmq.supabase.co`. URL + anon key + service role key guardadas en `apps/web/.env.local` y `apps/admin/.env.local` (nunca en la bóveda ni en git). Falta crear el proyecto de Resend.
+- [x] Proyecto de Supabase creado (2026-08-27): `https://jeebrphbdcuhfkyhicmq.supabase.co`. URL + anon key + service role key guardadas en `apps/web/.env.local` y `apps/admin/.env.local` (nunca en la bóveda ni en git).
+- [x] Cuenta de Resend creada y `RESEND_API_KEY` configurada en `.env.local` de ambas apps y en Vercel (2026-08-29). **Sin confirmar todavía**: si el dominio de `RESEND_FROM_EMAIL` está verificado en Resend — sin eso, el envío puede fallar o cualquier correo real puede llegar a spam/rebotar. Confirmar la primera vez que se mande un correo real.
 - [x] Repo remoto de GitHub confirmado y con el primer push hecho (2026-08-27): `https://github.com/ricamocolombia/RicamoCol.git`, rama `main` trackeando `origin/main`. Se autenticó con un Personal Access Token del usuario, usado una sola vez en el comando de push (nunca guardado en el remoto ni en ningún archivo).
 - [ ] Contenido de marca personal de Maria Jose (bio, redes, fotos, historia) más allá de lo público en Instagram.
 - [ ] Personal access token de Supabase (desde supabase.com/dashboard/account/tokens) o la contraseña de la base de datos, para poder aplicar la migración por CLI sin intervención manual — `supabase link` falló con "Unauthorized" sin esto.
@@ -71,7 +72,8 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 ## Integración
 - [ ] Webhook/Server Action que registre automáticamente en `orders` cada venta hecha desde el ecommerce — sigue pendiente de la pasarela de pago (sin eso no hay "venta hecha en el ecommerce" que registrar, hoy el catálogo cierra por WhatsApp).
 - [x] **Publicar diseño desde admin → visible en catálogo web, verificado en vivo** (2026-08-28) — se probó de punta a punta: un producto marcado `is_published = true` en `apps/admin/disenos/[id]/publicar` aparece de inmediato en `/catalogo` del ecommerce (lectura pública con `anon` key vía RLS), sin deploy ni intervención de código.
-- [ ] Notificaciones por email (Resend): confirmación de pedido, alertas de cuentas por pagar próximas a vencer.
+- [x] **Correos transaccionales con marca vía Resend** (2026-08-29, a pedido del usuario, API key ya configurada) — `packages/ui/src/email.ts` (plantillas HTML con el logo y colores de Ricamo) + `apps/admin/lib/orderEmails.ts`, conectado a la creación de venta (`ventas/nueva`) y a cada cambio de estado (`ventas/[id]`, timeline pendiente→confirmado→en_produccion→enviado→entregado, y cancelado). El correo de alertas de inventario (`stockAlerts.ts`) también se migró a la plantilla con marca. Ver detalle en `01 Progreso/2026-08-29.md`. **Pendiente**: no se ha enviado ningún correo real de prueba vía Resend (solo se generó el HTML localmente y se le mandó al usuario para revisión visual) — falta que el usuario confirme que llegan bien a la bandeja de entrada real.
+- [ ] Alertas de cuentas por pagar próximas a vencer por correo (parte de la idea original de "notificaciones por email" — la de confirmación de pedido ya quedó resuelta arriba, esta sigue pendiente).
 
 ## Infraestructura
 - [x] Repo conectado a Vercel por el usuario (proyecto `ricamo-col-a...` para `@ricamo/admin`). El primer deploy falló por build estático + variables de entorno faltantes — corregido el 2026-08-27 (ver nota de progreso). Falta confirmar si `@ricamo/web` también tiene su propio proyecto en Vercel.
