@@ -4,9 +4,9 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 
 ## Bloqueado por el usuario
 - [x] Logo oficial recibido y cargado en el repo (2026-08-27) — `apps/web/public/brand/` y `apps/admin/public/brand/`, conectado en headers y favicons. Colores `#F5C518` (amarillo) / `#0A0A0A` (negro) confirmados como estandar de facto — no existe manual de marca formal.
-- [ ] Confirmar si el WhatsApp del negocio es 3216245987 (+57), visto en el Instagram @ricamo_col.
+- [x] WhatsApp del negocio confirmado por el usuario (2026-08-29): **573216245987**. Ya estaba puesto como `NEXT_PUBLIC_WHATSAPP_NUMBER` en `apps/web/.env.local`/`.env.example` desde antes (se había tomado del Instagram público sin confirmar); ahora es un dato confirmado, no una suposición.
 - [ ] Elegir pasarela de pago para Colombia (Wompi / MercadoPago / PayU).
-- [ ] Dominio del sitio.
+- [x] Dominio del sitio: `ricamocol.com` comprado y vinculado al proyecto de Vercel de `@ricamo/web` (2026-08-29).
 - [x] Proyecto de Supabase creado (2026-08-27): `https://jeebrphbdcuhfkyhicmq.supabase.co`. URL + anon key + service role key guardadas en `apps/web/.env.local` y `apps/admin/.env.local` (nunca en la bóveda ni en git).
 - [x] Cuenta de Resend creada y `RESEND_API_KEY` configurada en `.env.local` de ambas apps y en Vercel (2026-08-29). **Sin confirmar todavía**: si el dominio de `RESEND_FROM_EMAIL` está verificado en Resend — sin eso, el envío puede fallar o cualquier correo real puede llegar a spam/rebotar. Confirmar la primera vez que se mande un correo real.
 - [x] Repo remoto de GitHub confirmado y con el primer push hecho (2026-08-27): `https://github.com/ricamocolombia/RicamoCol.git`, rama `main` trackeando `origin/main`. Se autenticó con un Personal Access Token del usuario, usado una sola vez en el comando de push (nunca guardado en el remoto ni en ningún archivo).

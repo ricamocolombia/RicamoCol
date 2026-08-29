@@ -182,7 +182,6 @@ Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Rica
 - **Falta `CRON_SECRET` en Vercel** y el correo de alertas en `/configuracion` — sin esto las alertas nocturnas de inventario no se envían (ver sección 4/6).
 - **Aplicar `supabase/migrations/0007_pagos_produccion.sql`** y configurar en `/configuracion` los proveedores de producción (estampado/bordado) — sin ambas cosas, las ventas con técnica no generan cuenta por pagar.
 - Confirmar que las variables de entorno de Vercel quedaron completas (`SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` como "Secret"/"Config" según corresponda) — el primer deploy falló por esto.
-- Confirmar si el WhatsApp del negocio para la web es 3216245987 (+57), visto en el Instagram.
 - Elegir pasarela de pago para Colombia (candidatas naturales: Wompi, MercadoPago, PayU).
 - Cuenta de Resend creada, `RESEND_API_KEY` configurada (2026-08-29) — falta confirmar si el dominio de `RESEND_FROM_EMAIL` está verificado en Resend (necesario para que el envío real funcione de forma confiable).
 - Contenido de marca personal de Maria Jose (bio, redes, fotos, historia) para `/sobre-maria-jose`, más allá de lo público en Instagram.
@@ -213,7 +212,7 @@ Lista viva y detallada en [`vault/Ricamo/02 Pendientes/Backlog.md`](./vault/Rica
 
 ## 11. Variables de entorno
 
-Ver `apps/web/.env.example` y `apps/admin/.env.example` para el detalle completo. En resumen, ambas apps necesitan Supabase (URL, anon key, service role key); el ecommerce además necesita Resend, el número de WhatsApp de Maria Jose y las credenciales de la pasarela de pagos (aún sin definir).
+Ver `apps/web/.env.example` y `apps/admin/.env.example` para el detalle completo. En resumen, ambas apps necesitan Supabase (URL, anon key, service role key) y Resend (`RESEND_API_KEY`/`RESEND_FROM_EMAIL`, ya configuradas); el ecommerce además necesita el número de WhatsApp (`NEXT_PUBLIC_WHATSAPP_NUMBER=573216245987`, confirmado por el negocio) y las credenciales de la pasarela de pagos (aún sin definir).
 
 ## 12. Notas para Claude Code en este repo
 
