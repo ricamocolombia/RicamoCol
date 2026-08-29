@@ -1,25 +1,34 @@
 import Link from "next/link";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
-import { signOut } from "./login/actions";
 import { currencyFormatter } from "../lib/metrics";
+import { StatCard } from "../components/dashboard/StatCard";
+import { RankedList } from "../components/dashboard/RankedList";
+import { TrendChart } from "../components/dashboard/TrendChart";
+import {
+  IconAlert,
+  IconArchive,
+  IconArrowDownCircle,
+  IconArrowUpCircle,
+  IconBank,
+  IconCart,
+  IconPalette,
+  IconShoppingBag,
+  IconTrendUp,
+  IconUsers,
+} from "../components/icons";
 
 // Datos en vivo del negocio: nunca prerenderizar de forma estatica.
 export const dynamic = "force-dynamic";
 
-const sections = [
-  { href: "/ventas", label: "Ventas" },
-  { href: "/clientes", label: "Clientes" },
-  { href: "/campanas", label: "Campañas" },
-  { href: "/compras", label: "Compras" },
-  { href: "/inventario", label: "Inventario" },
-  { href: "/bodegas", label: "Bodegas" },
-  { href: "/cuentas-por-cobrar", label: "Cuentas por cobrar" },
-  { href: "/cuentas-por-pagar", label: "Cuentas por pagar" },
-  { href: "/bancos", label: "Bancos" },
-  { href: "/proveedores", label: "Proveedores" },
-  { href: "/domiciliarios", label: "Domiciliarios" },
-  { href: "/disenos", label: "Diseños" },
-  { href: "/configuracion", label: "Configuración" },
+const QUICK_LINKS = [
+  { href: "/ventas", label: "Ventas", icon: IconCart },
+  { href: "/clientes", label: "Clientes", icon: IconUsers },
+  { href: "/compras", label: "Compras", icon: IconShoppingBag },
+  { href: "/inventario", label: "Inventario", icon: IconArchive },
+  { href: "/cuentas-por-cobrar", label: "Por cobrar", icon: IconArrowDownCircle },
+  { href: "/cuentas-por-pagar", label: "Por pagar", icon: IconArrowUpCircle },
+  { href: "/bancos", label: "Bancos", icon: IconBank },
+  { href: "/disenos", label: "Diseños", icon: IconPalette },
 ];
 
 interface OrderRow {
@@ -52,6 +61,12 @@ interface ItemRow {
   cost_cop: number | null;
 }
 
+interface AccountRow {
+  amount_cop: number;
+  status: "pendiente" | "pagado" | "vencido" | "anulado";
+  due_date: string | null;
+}
+
 const ORDER_STATUS_LABELS: Record<string, string> = {
   pendiente: "Pendiente",
   confirmado: "Confirmado",
@@ -68,67 +83,54 @@ const SOURCE_LABELS: Record<string, string> = {
   manual: "Manual",
 };
 
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4">
-      <p className="text-xs text-neutral-500 mb-1">{label}</p>
-      <p className="text-xl font-bold text-ricamo-black">{value}</p>
-      {hint && <p className="text-xs text-neutral-400 mt-1">{hint}</p>}
-    </div>
-  );
+const today = new Date(new Date().toDateString());
+
+function isOverdue(row: AccountRow) {
+  if (row.status === "vencido") return true;
+  if (row.status !== "pendiente") return false;
+  return row.due_date !== null && new Date(row.due_date) < today;
 }
 
-function BarList({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: { label: string; value: number; sublabel?: string }[];
-}) {
-  const max = Math.max(1, ...rows.map((r) => r.value));
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-6">
-      <h2 className="text-sm font-semibold mb-4">{title}</h2>
-      {rows.length === 0 ? (
-        <p className="text-sm text-neutral-400">Sin datos todavía.</p>
-      ) : (
-        <div className="space-y-3">
-          {rows.map((row) => (
-            <div key={row.label}>
-              <div className="flex items-center justify-between text-sm mb-1">
-                <span className="font-medium truncate pr-2">
-                  {row.label}
-                  {row.sublabel && (
-                    <span className="text-neutral-400 font-normal">
-                      {" "}
-                      · {row.sublabel}
-                    </span>
-                  )}
-                </span>
-                <span className="text-neutral-600 whitespace-nowrap">
-                  {currencyFormatter.format(row.value)}
-                </span>
-              </div>
-              <div className="h-1.5 bg-neutral-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-ricamo-yellow rounded-full"
-                  style={{ width: `${Math.max(4, (row.value / max) * 100)}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+function countFormatter(n: number) {
+  return String(n);
+}
+
+function shortDate(d: Date) {
+  return new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" }).format(d);
+}
+
+// Arma los baldes de la tendencia de ventas: diario si el rango cabe en 45
+// dias, semanal si es mas largo (para no saturar el grafico de puntos).
+function buildSalesTrend(orders: OrderRow[], rangeStart: Date, rangeEnd: Date) {
+  const totalDays = Math.max(
+    1,
+    Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1
   );
+  const stepDays = totalDays > 45 ? 7 : 1;
+
+  const buckets: { key: string; label: string; value: number; from: Date; to: Date }[] = [];
+  const cursor = new Date(rangeStart);
+  while (cursor <= rangeEnd) {
+    const from = new Date(cursor);
+    const to = new Date(cursor);
+    to.setDate(to.getDate() + stepDays - 1);
+    buckets.push({
+      key: from.toISOString(),
+      label: stepDays === 1 ? shortDate(from) : `sem. ${shortDate(from)}`,
+      value: 0,
+      from,
+      to,
+    });
+    cursor.setDate(cursor.getDate() + stepDays);
+  }
+
+  for (const order of orders) {
+    const orderDate = new Date(order.created_at);
+    const bucket = buckets.find((b) => orderDate >= b.from && orderDate <= new Date(b.to.getTime() + 86399999));
+    if (bucket) bucket.value += order.total_cop;
+  }
+
+  return buckets.map(({ label, value }) => ({ label, value }));
 }
 
 export default async function DashboardPage({
@@ -153,8 +155,8 @@ export default async function DashboardPage({
       .select("id, customer_id, source, status, total_cop, payment_status, created_at"),
     supabase.from("customers").select("id, full_name, city"),
     supabase.from("transactions").select("type, amount_cop, category, occurred_at"),
-    supabase.from("accounts_receivable").select("amount_cop, status"),
-    supabase.from("accounts_payable").select("amount_cop, status"),
+    supabase.from("accounts_receivable").select("amount_cop, status, due_date"),
+    supabase.from("accounts_payable").select("amount_cop, status, due_date"),
     supabase.from("inventory_items").select("quantity_on_hand, reorder_level"),
     supabase.from("order_items").select("order_id, quantity, unit_price_cop, cost_cop"),
   ]);
@@ -162,8 +164,8 @@ export default async function DashboardPage({
   const allOrders = (ordersData ?? []) as unknown as OrderRow[];
   const customers = (customersData ?? []) as unknown as CustomerRow[];
   const allTransactions = (transactionsData ?? []) as unknown as TransactionRow[];
-  const receivables = receivableData ?? [];
-  const payables = payableData ?? [];
+  const receivables = (receivableData ?? []) as unknown as AccountRow[];
+  const payables = (payableData ?? []) as unknown as AccountRow[];
   const inventoryItems = inventoryData ?? [];
   const allItems = (itemsData ?? []) as unknown as ItemRow[];
 
@@ -234,14 +236,24 @@ export default async function DashboardPage({
     .filter((p) => p.status === "pendiente" || p.status === "vencido")
     .reduce((sum, p) => sum + p.amount_cop, 0);
 
+  const cxcVencidas = receivables.filter(isOverdue);
+  const cxpVencidas = payables.filter(isOverdue);
+  const montoVencidoCxc = cxcVencidas.reduce((sum, r) => sum + r.amount_cop, 0);
+  const montoVencidoCxp = cxpVencidas.reduce((sum, p) => sum + p.amount_cop, 0);
+
   // Operacion
   const pedidosPorEstado = new Map<string, number>();
   for (const order of orders) {
     pedidosPorEstado.set(order.status, (pedidosPorEstado.get(order.status) ?? 0) + 1);
   }
-  const stockEnAlerta = inventoryItems.filter(
-    (i) => i.quantity_on_hand <= i.reorder_level
-  ).length;
+  const estadoRows = [...pedidosPorEstado.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([status, count]) => ({ label: ORDER_STATUS_LABELS[status] ?? status, value: count }));
+
+  const pedidosPendientesConfirmar = allOrders.filter((o) => o.status === "pendiente").length;
+
+  const stockAlertItems = inventoryItems.filter((i) => i.quantity_on_hand <= i.reorder_level);
+  const stockEnAlerta = stockAlertItems.length;
 
   // Ciudades con mayor venta
   const ventasPorCiudad = new Map<string, number>();
@@ -293,21 +305,49 @@ export default async function DashboardPage({
     .slice(0, 5)
     .map(([label, value]) => ({ label, value }));
 
-  return (
-    <main className="px-6 py-10">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Panel Ricamo</h1>
-        <form action={signOut}>
-          <button
-            type="submit"
-            className="text-sm text-neutral-500 hover:text-ricamo-red"
-          >
-            Cerrar sesión
-          </button>
-        </form>
-      </div>
+  // Tendencia de ventas: respeta el filtro de periodo si existe, si no
+  // muestra los ultimos 30 dias por defecto.
+  const trendEnd = hastaDate ?? new Date();
+  const trendStart = desdeDate ?? new Date(trendEnd.getTime() - 29 * 86400000);
+  const salesTrend = buildSalesTrend(orders, trendStart, trendEnd);
 
-      <form className="flex flex-wrap items-end gap-3 mb-6 rounded-xl border border-neutral-200 bg-white p-4">
+  const attentionItems = [
+    pedidosPendientesConfirmar > 0 && {
+      href: "/ventas",
+      label: "Pedidos por confirmar",
+      value: String(pedidosPendientesConfirmar),
+      detail: "esperando pasar a confirmado",
+    },
+    cxcVencidas.length > 0 && {
+      href: "/cuentas-por-cobrar",
+      label: "Cuentas por cobrar vencidas",
+      value: currencyFormatter.format(montoVencidoCxc),
+      detail: `${cxcVencidas.length} cuenta${cxcVencidas.length === 1 ? "" : "s"}`,
+    },
+    cxpVencidas.length > 0 && {
+      href: "/cuentas-por-pagar",
+      label: "Cuentas por pagar vencidas",
+      value: currencyFormatter.format(montoVencidoCxp),
+      detail: `${cxpVencidas.length} cuenta${cxpVencidas.length === 1 ? "" : "s"}`,
+    },
+    stockEnAlerta > 0 && {
+      href: "/inventario",
+      label: "Ítems con stock bajo",
+      value: String(stockEnAlerta),
+      detail: "por debajo del nivel de reorden",
+    },
+  ].filter((x): x is { href: string; label: string; value: string; detail: string } => Boolean(x));
+
+  return (
+    <main className="px-5 sm:px-8 py-8 max-w-[1400px]">
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-2xl font-bold">Panel de control</h1>
+      </div>
+      <p className="text-sm text-neutral-500 mb-6">
+        Vista general del negocio — ventas, finanzas y operación en un solo lugar.
+      </p>
+
+      <form className="flex flex-wrap items-end gap-3 mb-8 rounded-2xl border border-neutral-200 bg-white p-4">
         <div>
           <label htmlFor="desde" className="block text-xs font-medium mb-1 text-neutral-500">
             Desde
@@ -334,7 +374,7 @@ export default async function DashboardPage({
         </div>
         <button
           type="submit"
-          className="bg-ricamo-black text-white text-sm font-semibold rounded-lg px-4 py-1.5"
+          className="bg-ricamo-black text-white text-sm font-semibold rounded-lg px-4 py-1.5 cursor-pointer hover:bg-ricamo-red transition-colors"
         >
           Filtrar
         </button>
@@ -345,31 +385,104 @@ export default async function DashboardPage({
         )}
       </form>
 
+      {/* Accesos rapidos: la navegacion principal vive en el sidebar, esto
+          es solo un atajo a los modulos de uso mas frecuente. */}
+      <section className="mb-8">
+        <div className="flex flex-wrap gap-2.5">
+          {QUICK_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="group flex items-center gap-2 rounded-full border border-neutral-200 bg-white pl-2.5 pr-4 py-2 text-sm font-medium text-neutral-700 hover:border-ricamo-black hover:text-ricamo-black transition-colors cursor-pointer"
+            >
+              <span className="w-6 h-6 rounded-full bg-neutral-100 group-hover:bg-ricamo-yellow/40 flex items-center justify-center transition-colors">
+                <link.icon className="w-3.5 h-3.5" />
+              </span>
+              {link.label}
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {attentionItems.length > 0 && (
+        <section className="mb-8">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-ricamo-red mb-3">
+            <IconAlert className="w-4 h-4" />
+            Pendiente de atención
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {attentionItems.map((item) => (
+              <Link
+                key={item.href + item.label}
+                href={item.href}
+                className="rounded-2xl border border-ricamo-red/25 bg-ricamo-red/5 p-5 hover:border-ricamo-red/60 transition-colors cursor-pointer"
+              >
+                <p className="text-xs font-medium text-ricamo-red/80 mb-2">{item.label}</p>
+                <p className="text-xl font-bold text-ricamo-black">{item.value}</p>
+                <p className="text-xs text-neutral-500 mt-1">{item.detail}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide mb-3">
           Ventas
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Stat label="Ventas totales" value={String(ventasTotales)} hint="pedidos registrados" />
-          <Stat label="Ingresos cobrados" value={currencyFormatter.format(ingresosPorVentas)} hint="pagado o con anticipo" />
-          <Stat label="Ticket promedio" value={currencyFormatter.format(ticketPromedio)} />
-          <Stat
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Ventas totales"
+            value={String(ventasTotales)}
+            hint="pedidos registrados"
+            icon={IconCart}
+            accent="yellow"
+          />
+          <StatCard
+            label="Ingresos cobrados"
+            value={currencyFormatter.format(ingresosPorVentas)}
+            hint="pagado o con anticipo"
+            icon={IconBank}
+            accent="yellow"
+          />
+          <StatCard label="Ticket promedio" value={currencyFormatter.format(ticketPromedio)} icon={IconTrendUp} accent="neutral" />
+          <StatCard
             label="% de recompra"
             value={`${porcentajeRecompra.toFixed(0)}%`}
             hint={`${clientesRecurrentes} de ${clientesConCompras} clientes`}
+            icon={IconUsers}
+            accent="neutral"
           />
         </div>
+      </section>
+
+      <section className="mb-8 grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="xl:col-span-2 rounded-2xl border border-neutral-200 bg-white p-6">
+          <h3 className="text-sm font-semibold mb-1">Ventas en el tiempo</h3>
+          <TrendChart points={salesTrend} formatValue={(n) => currencyFormatter.format(n)} color="#D7263D" />
+        </div>
+        <RankedList title="Pedidos por estado" rows={estadoRows} formatValue={countFormatter} emptyLabel="Sin pedidos todavía." />
       </section>
 
       <section className="mb-8">
         <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide mb-3">
           Finanzas
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Stat label="Ingresos en bancos" value={currencyFormatter.format(ingresosBancos)} />
-          <Stat label="Salidas / gastos" value={currencyFormatter.format(salidasBancos)} />
-          <Stat label="Balance neto" value={currencyFormatter.format(balanceBancos)} />
-          <Stat label="Por cobrar / por pagar" value={`${currencyFormatter.format(cxcPendiente)} / ${currencyFormatter.format(cxpPendiente)}`} />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Ingresos en bancos" value={currencyFormatter.format(ingresosBancos)} icon={IconBank} accent="neutral" />
+          <StatCard label="Salidas / gastos" value={currencyFormatter.format(salidasBancos)} icon={IconArrowUpCircle} accent="neutral" />
+          <StatCard
+            label="Balance neto"
+            value={currencyFormatter.format(balanceBancos)}
+            icon={IconBank}
+            accent={balanceBancos >= 0 ? "yellow" : "red"}
+          />
+          <StatCard
+            label="Por cobrar vs. por pagar"
+            value={`${currencyFormatter.format(cxcPendiente)} / ${currencyFormatter.format(cxpPendiente)}`}
+            icon={IconArrowDownCircle}
+            accent="neutral"
+          />
         </div>
       </section>
 
@@ -377,76 +490,35 @@ export default async function DashboardPage({
         <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide mb-3">
           Rentabilidad
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <Stat
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatCard
             label="Rentabilidad bruta"
             value={currencyFormatter.format(rentabilidadBruta)}
             hint="precio de venta menos costo de bordado/estampado"
+            icon={IconTrendUp}
+            accent="red"
           />
-          <Stat label="Margen bruto" value={`${margenBruto.toFixed(0)}%`} />
-          <Stat
-            label="Items con costo registrado"
+          <StatCard label="Margen bruto" value={`${margenBruto.toFixed(0)}%`} icon={IconTrendUp} accent="red" />
+          <StatCard
+            label="Ítems con costo registrado"
             value={`${itemsConCosto} de ${items.length}`}
             hint={
               items.length > itemsConCosto
                 ? "los items sin costo no se incluyen en el cálculo"
                 : undefined
             }
+            icon={IconShoppingBag}
+            accent="neutral"
           />
         </div>
       </section>
 
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide mb-3">
-          Operación
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="rounded-xl border border-neutral-200 bg-white p-6">
-            <h3 className="text-sm font-semibold mb-3">Pedidos por estado</h3>
-            {pedidosPorEstado.size === 0 ? (
-              <p className="text-sm text-neutral-400">Sin pedidos todavía.</p>
-            ) : (
-              <ul className="text-sm space-y-1.5">
-                {[...pedidosPorEstado.entries()].map(([status, count]) => (
-                  <li key={status} className="flex justify-between">
-                    <span className="text-neutral-600">
-                      {ORDER_STATUS_LABELS[status] ?? status}
-                    </span>
-                    <span className="font-medium">{count}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <Stat
-            label="Ítems de inventario en alerta de stock"
-            value={String(stockEnAlerta)}
-            hint="cantidad disponible por debajo del nivel de reorden"
-          />
-        </div>
+      <section className="mb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <RankedList title="Top 5 ciudades por ventas" rows={topCiudades} formatValue={(n) => currencyFormatter.format(n)} />
+        <RankedList title="Top 5 clientes por valor" rows={topClientes} formatValue={(n) => currencyFormatter.format(n)} />
+        <RankedList title="Ventas por origen" rows={origenRows} formatValue={(n) => currencyFormatter.format(n)} />
+        <RankedList title="Gastos por categoría" rows={topGastos} formatValue={(n) => currencyFormatter.format(n)} />
       </section>
-
-      <section className="mb-10 grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <BarList title="Top 5 ciudades por ventas" rows={topCiudades} />
-        <BarList title="Top 5 clientes por valor" rows={topClientes} />
-        <BarList title="Ventas por origen" rows={origenRows} />
-        <BarList title="Gastos por categoría" rows={topGastos} />
-      </section>
-
-      <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide mb-3">
-        Módulos
-      </h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {sections.map((s) => (
-          <Link
-            key={s.href}
-            href={s.href}
-            className="rounded-xl border border-neutral-200 bg-white p-6 font-medium hover:border-ricamo-yellow"
-          >
-            {s.label}
-          </Link>
-        ))}
-      </div>
     </main>
   );
 }
