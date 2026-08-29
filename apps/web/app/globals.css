@@ -13,11 +13,13 @@
 
 @layer utilities {
   /* Subrayado tipo marcador, a mano alzada -- eco del trazo del logo, usado
-     con moderacion en titulos y enlaces clave. */
+     con moderacion en titulos y enlaces clave. Es un subrayado grueso debajo
+     del texto (no un resaltado detras), para que nunca tape las letras. */
   .marker-underline {
-    background-image: linear-gradient(currentColor, currentColor);
-    background-size: 100% 0.5em;
-    background-repeat: no-repeat;
-    background-position: 0 88%;
+    text-decoration-line: underline;
+    text-decoration-color: currentColor;
+    text-decoration-thickness: 0.22em;
+    text-underline-offset: 0.06em;
+    text-decoration-skip-ink: none;
   }
 }

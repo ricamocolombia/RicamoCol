@@ -15,9 +15,9 @@ export function Header() {
           <Image
             src="/brand/logo-transparente-negro.png"
             alt="Ricamo — lo creas, lo llevas"
-            width={160}
-            height={160}
-            className="h-10 w-auto"
+            width={220}
+            height={220}
+            className="h-14 w-auto"
             priority
           />
         </Link>

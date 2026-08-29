@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@ricamo/supabase/server";
 import { ProductCard, type ProductCardData } from "../components/ProductCard";
@@ -94,22 +95,16 @@ export default async function HomePage() {
         </div>
 
         {/* TODO: reemplazar por una foto real de producto/lifestyle cuando
-            el negocio la entregue. Placeholder de marca mientras tanto. */}
-        <div className="relative aspect-square rounded-[2.5rem] bg-ricamo-yellow overflow-hidden flex items-center justify-center">
-          <svg
-            viewBox="0 0 200 200"
-            className="w-2/3 h-2/3 text-ricamo-black/90"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="4"
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <path d="M60 30 C40 35, 30 55, 32 78 C34 105, 55 125, 82 128 C112 132, 140 112, 145 82 C150 55, 132 32, 105 30" />
-            <path d="M62 82 L70 90 L82 76" />
-            <circle cx="70" cy="60" r="4" fill="currentColor" stroke="none" />
-            <circle cx="98" cy="58" r="4" fill="currentColor" stroke="none" />
-          </svg>
+            el negocio la entregue. Mientras tanto, el logo hace de placeholder. */}
+        <div className="relative aspect-square rounded-[2.5rem] bg-ricamo-yellow overflow-hidden flex items-center justify-center p-16">
+          <Image
+            src="/brand/logo-transparente-negro.png"
+            alt="Ricamo"
+            width={480}
+            height={480}
+            className="w-full h-full object-contain"
+            priority
+          />
         </div>
       </section>
 
