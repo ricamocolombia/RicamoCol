@@ -76,8 +76,14 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [ ] Alertas de cuentas por pagar próximas a vencer por correo (parte de la idea original de "notificaciones por email" — la de confirmación de pedido ya quedó resuelta arriba, esta sigue pendiente).
 
 ## Infraestructura
-- [x] Repo conectado a Vercel por el usuario (proyecto `ricamo-col-a...` para `@ricamo/admin`). El primer deploy falló por build estático + variables de entorno faltantes — corregido el 2026-08-27 (ver nota de progreso). Falta confirmar si `@ricamo/web` también tiene su propio proyecto en Vercel.
+- [x] Repo conectado a Vercel por el usuario, **dos proyectos separados**: `@ricamo/admin` y `@ricamo/web` (este último creado 2026-08-29). Dominio propio `ricamocol.com` apunta a `@ricamo/web` — confirmado en vivo el 2026-08-29 (auditoría del sitio real).
 - [ ] Variables de entorno en Vercel: confirmar que además de `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` (Type "Config", no "Secret" — son públicas por diseño) están `SUPABASE_SERVICE_ROLE_KEY`/`RESEND_API_KEY`/`RESEND_FROM_EMAIL` (Type "Secret"/"Config" según corresponda) para que el panel funcione en producción y no solo compile.
 - [ ] **Falta agregar `CRON_SECRET`** (Type "Secret", cualquier string aleatorio largo) en las variables de entorno de Vercel para `@ricamo/admin` — sin esto, `/api/cron/stock-alerts` rechaza todas las llamadas (incluida la de Vercel Cron) y las alertas nocturnas nunca se envían.
+- [ ] **Falta agregar `NEXT_PUBLIC_GA_MEASUREMENT_ID` (`G-XZX597MZ3F`) y `NEXT_PUBLIC_META_PIXEL_ID` (`1799998441442583`)** en las variables de entorno de Vercel para `@ricamo/web` y redesplegar (2026-08-29, ver nota de progreso) — ambas ya integradas en el código y verificadas en vivo en local, pero sin esto `ricamocol.com` en producción no está trackeando nada todavía.
 - [ ] Configurar el correo de alertas de inventario en `/configuracion` (campo "Correo de alertas") para que las alertas nocturnas tengan a dónde llegar.
 - [x] Primer commit + push a GitHub hecho (2026-08-27).
+
+## SEO (detectado en la auditoría de ricamocol.com, 2026-08-29)
+- [ ] `/catalogo`, `/personalizados` y `/sobre-maria-jose` no tienen `metadata` propio — heredan el título/descripción genérico del layout raíz, Google los indexa a todos igual.
+- [ ] Sin `robots.txt` ni `sitemap.xml` (ambos devuelven 404 en producción).
+- [ ] Sin Open Graph ni Twitter Card tags — compartir un link de Ricamo en WhatsApp/Instagram no muestra preview con imagen/título.
