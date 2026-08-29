@@ -37,6 +37,7 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [ ] Integrar pasarela de pago para el catálogo (Wompi/MercadoPago/PayU, sin elegir todavía) — hoy el CTA de compra en `/catalogo/[slug]` va a WhatsApp.
 - [x] Logo real conectado en header (`app/layout.tsx`) y favicon (`app/icon.png`) del ecommerce.
 - [x] Tipografía de marca definida (Fredoka + Nunito, 2026-08-28).
+- [x] **Botón flotante de WhatsApp en todas las páginas** (2026-08-29, a pedido del usuario) — `apps/web/components/WhatsAppFloatingButton.tsx`, montado una sola vez en `app/layout.tsx`. Verde oficial de WhatsApp (no los colores de marca) para que se reconozca de inmediato como acceso al chat.
 
 ## App admin (apps/admin)
 - [x] Autenticación (login) para la app admin vía Supabase Auth (2026-08-27) — middleware protege todas las rutas, `/login` con email+password, logout en el dashboard. Primera cuenta creada (`juancamilo965@gmail.com`) con `pnpm create-admin-user <email> <password>` (usa la service_role key, sin flujo de auto-registro).
