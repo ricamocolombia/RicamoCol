@@ -183,7 +183,9 @@ export default async function VentasPage() {
                 return (
                   <tr key={order.id} className="border-b border-neutral-100 last:border-0">
                     <td className="px-4 py-3 font-medium">
-                      {customer?.full_name ?? "Sin cliente"}
+                      <Link href={`/ventas/${order.id}`} className="hover:underline">
+                        {customer?.full_name ?? "Sin cliente"}
+                      </Link>
                       {customer?.phone && (
                         <div className="text-xs text-neutral-500 font-normal">
                           {customer.phone}
