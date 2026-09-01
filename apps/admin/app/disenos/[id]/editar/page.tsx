@@ -1,7 +1,14 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
-import { actualizarDiseno } from "./actions";
+import {
+  actualizarDiseno,
+  agregarImagenesDiseno,
+  eliminarImagenDiseno,
+  marcarPortadaDiseno,
+} from "./actions";
+import { ImageDropzone } from "../../../../components/ImageDropzone";
 
 type DesignTechnique = "bordado" | "estampado";
 
@@ -20,6 +27,12 @@ interface CustomerRow {
   phone: string | null;
 }
 
+interface DesignImageRow {
+  id: string;
+  image_url: string;
+  is_cover: boolean;
+}
+
 // Datos en vivo del negocio: nunca prerenderizar de forma estatica.
 export const dynamic = "force-dynamic";
 
@@ -34,7 +47,7 @@ export default async function EditarDisenoPage({
   const { error } = await searchParams;
   const supabase = createServiceRoleClient();
 
-  const [{ data: designData }, { data: customersData }] = await Promise.all([
+  const [{ data: designData }, { data: customersData }, { data: imagesData }] = await Promise.all([
     supabase
       .from("designs")
       .select("id, name, technique, customer_id, image_url, notes")
@@ -44,10 +57,16 @@ export default async function EditarDisenoPage({
       .from("customers")
       .select("id, full_name, phone")
       .order("full_name", { ascending: true }),
+    supabase
+      .from("design_images")
+      .select("id, image_url, is_cover")
+      .eq("design_id", id)
+      .order("sort_order", { ascending: true }),
   ]);
 
   const design = designData as unknown as DesignRow | null;
   const customers = (customersData ?? []) as unknown as CustomerRow[];
+  const images = (imagesData ?? []) as unknown as DesignImageRow[];
 
   if (!design) {
     notFound();
@@ -128,23 +147,6 @@ export default async function EditarDisenoPage({
           </div>
 
           <div>
-            <label
-              htmlFor="image_url"
-              className="block text-sm font-medium mb-1"
-            >
-              URL de la imagen
-            </label>
-            <input
-              id="image_url"
-              name="image_url"
-              type="text"
-              defaultValue={design.image_url ?? ""}
-              placeholder="https://..."
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
-            />
-          </div>
-
-          <div>
             <label htmlFor="notes" className="block text-sm font-medium mb-1">
               Notas
             </label>
@@ -165,6 +167,62 @@ export default async function EditarDisenoPage({
           Guardar cambios
         </button>
       </form>
+
+      <section className="rounded-xl border border-neutral-200 bg-white p-6 mt-6">
+        <h2 className="text-sm font-semibold mb-4">Galería de imágenes</h2>
+
+        {images.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+            {images.map((img) => (
+              <div key={img.id} className="relative">
+                <div className="relative w-full aspect-square rounded-lg overflow-hidden border border-neutral-200 bg-neutral-50">
+                  <Image src={img.image_url} alt="" fill sizes="200px" className="object-cover" />
+                  {img.is_cover && (
+                    <span className="absolute top-1.5 left-1.5 bg-ricamo-yellow text-ricamo-black text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5">
+                      Portada
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-1.5 mt-1.5">
+                  {!img.is_cover && (
+                    <form action={marcarPortadaDiseno}>
+                      <input type="hidden" name="design_id" value={design.id} />
+                      <input type="hidden" name="image_id" value={img.id} />
+                      <button
+                        type="submit"
+                        className="text-[11px] text-neutral-500 hover:text-ricamo-black underline underline-offset-2"
+                      >
+                        Marcar portada
+                      </button>
+                    </form>
+                  )}
+                  <form action={eliminarImagenDiseno}>
+                    <input type="hidden" name="design_id" value={design.id} />
+                    <input type="hidden" name="image_id" value={img.id} />
+                    <button
+                      type="submit"
+                      className="text-[11px] text-neutral-400 hover:text-ricamo-red underline underline-offset-2 ml-auto"
+                    >
+                      Eliminar
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form action={agregarImagenesDiseno}>
+          <input type="hidden" name="id" value={design.id} />
+          <ImageDropzone name="images" multiple label="Agregar más imágenes" />
+          <button
+            type="submit"
+            className="mt-3 bg-ricamo-black text-white text-sm font-semibold rounded-lg px-4 py-2"
+          >
+            Subir imágenes
+          </button>
+        </form>
+      </section>
     </main>
   );
 }

@@ -2,22 +2,14 @@ import Link from "next/link";
 import { createClient } from "@ricamo/supabase/server";
 import { ProductCard, type ProductCardData } from "../../components/ProductCard";
 import { GARMENT_LABELS, TECHNIQUE_LABELS } from "../../lib/format";
+import { attachCatalogData, type CatalogProductInput } from "../../lib/catalog";
 
 export const dynamic = "force-dynamic";
 
-interface ProductRow {
+interface CollectionRow {
   id: string;
-  design_id: string | null;
   name: string;
   slug: string;
-  garment_type: string;
-  technique: string;
-  base_price_cop: number;
-}
-
-interface DesignRow {
-  id: string;
-  image_url: string | null;
 }
 
 const GARMENT_FILTERS = ["camiseta", "buzo"];
@@ -26,14 +18,23 @@ const TECHNIQUE_FILTERS = ["bordado", "estampado"];
 export default async function CatalogoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tecnica?: string; prenda?: string }>;
+  searchParams: Promise<{ tecnica?: string; prenda?: string; coleccion?: string }>;
 }) {
-  const { tecnica, prenda } = await searchParams;
+  const { tecnica, prenda, coleccion } = await searchParams;
   const supabase = await createClient();
+
+  const { data: collectionsData } = await supabase
+    .from("collections")
+    .select("id, name, slug")
+    .order("sort_order", { ascending: true });
+  const collections = (collectionsData ?? []) as unknown as CollectionRow[];
+  const activeCollection = coleccion ? collections.find((c) => c.slug === coleccion) : undefined;
 
   let query = supabase
     .from("products")
-    .select("id, design_id, name, slug, garment_type, technique, base_price_cop")
+    .select(
+      "id, design_id, name, slug, garment_type, technique, base_price_cop, collection_id, is_bestseller, created_at"
+    )
     .eq("is_published", true)
     .order("created_at", { ascending: false });
 
@@ -43,37 +44,23 @@ export default async function CatalogoPage({
   if (prenda && GARMENT_FILTERS.includes(prenda)) {
     query = query.eq("garment_type", prenda);
   }
-
-  const { data: productsData, error } = await query;
-  const products = (productsData ?? []) as unknown as ProductRow[];
-
-  const designIds = products.map((p) => p.design_id).filter((id): id is string => Boolean(id));
-  const designsById = new Map<string, DesignRow>();
-  if (designIds.length > 0) {
-    const { data: designsData } = await supabase
-      .from("designs")
-      .select("id, image_url")
-      .in("id", designIds);
-    for (const d of (designsData ?? []) as unknown as DesignRow[]) {
-      designsById.set(d.id, d);
-    }
+  if (activeCollection) {
+    query = query.eq("collection_id", activeCollection.id);
   }
 
-  const items: ProductCardData[] = products.map((p) => ({
-    slug: p.slug,
-    name: p.name,
-    imageUrl: p.design_id ? designsById.get(p.design_id)?.image_url ?? null : null,
-    priceCop: p.base_price_cop,
-    garmentType: p.garment_type,
-    technique: p.technique,
-  }));
+  const { data: productsData, error } = await query;
+  const products = (productsData ?? []) as unknown as CatalogProductInput[];
 
-  function filterHref(next: { tecnica?: string; prenda?: string }) {
+  const items: ProductCardData[] = await attachCatalogData(supabase, products);
+
+  function filterHref(next: { tecnica?: string; prenda?: string; coleccion?: string }) {
     const params = new URLSearchParams();
     const t = next.tecnica ?? tecnica;
     const p = next.prenda ?? prenda;
+    const c = next.coleccion ?? coleccion;
     if (t) params.set("tecnica", t);
     if (p) params.set("prenda", p);
+    if (c) params.set("coleccion", c);
     const qs = params.toString();
     return qs ? `/catalogo?${qs}` : "/catalogo";
   }
@@ -91,6 +78,24 @@ export default async function CatalogoPage({
           .
         </p>
       </div>
+
+      {collections.length > 0 && (
+        <div className="flex flex-wrap gap-3 mb-6">
+          {collections.map((c) => (
+            <Link
+              key={c.id}
+              href={coleccion === c.slug ? filterHref({ coleccion: undefined }) : filterHref({ coleccion: c.slug })}
+              className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+                coleccion === c.slug
+                  ? "bg-ricamo-red text-white border-ricamo-red"
+                  : "border-ricamo-red/30 text-ricamo-red hover:border-ricamo-red"
+              }`}
+            >
+              {c.name}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 mb-10">
         <Link

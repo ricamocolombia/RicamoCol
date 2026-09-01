@@ -8,7 +8,8 @@ import { signOut } from "../app/login/actions";
 import { IconClose, IconDashboard, IconLogout, IconMenu } from "./icons";
 import { NAV_GROUPS } from "./navItems";
 
-function isActive(pathname: string, href: string) {
+function isActive(pathname: string, href: string, exact?: boolean) {
+  if (exact) return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -65,7 +66,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </p>
             <div className="space-y-0.5">
               {group.items.map((item) => {
-                const active = isActive(pathname ?? "", item.href);
+                const active = isActive(pathname ?? "", item.href, item.exact);
                 return (
                   <Link
                     key={item.href}

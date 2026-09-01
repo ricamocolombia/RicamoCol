@@ -3,63 +3,89 @@ import Link from "next/link";
 import { createClient } from "@ricamo/supabase/server";
 import { ProductCard, type ProductCardData } from "../components/ProductCard";
 import { MariaJoseSpotlight } from "../components/MariaJoseSpotlight";
+import { attachCatalogData, type CatalogProductInput } from "../lib/catalog";
 
 // Catalogo real, sin cache de build: nunca prerenderizar de forma estatica.
 export const dynamic = "force-dynamic";
 
-interface ProductRow {
+const FEATURED_LIMIT = 8;
+const PRODUCT_COLUMNS =
+  "id, design_id, name, slug, garment_type, technique, base_price_cop, collection_id, is_bestseller, created_at";
+
+interface CollectionTeaserRow {
   id: string;
-  design_id: string | null;
   name: string;
   slug: string;
-  garment_type: string;
-  technique: string;
-  base_price_cop: number;
+  cover_image_url: string | null;
 }
 
-interface DesignRow {
-  id: string;
-  image_url: string | null;
-}
-
+// "Destacados": lo que Maria Jose cura a mano (is_featured); si no alcanza
+// el cupo, se rellena con los productos publicados mas recientes que no
+// esten ya incluidos, para que la seccion nunca se vea vacia.
 async function getFeaturedProducts(): Promise<ProductCardData[]> {
   const supabase = await createClient();
 
-  const { data: productsData } = await supabase
+  const { data: featuredData } = await supabase
     .from("products")
-    .select("id, design_id, name, slug, garment_type, technique, base_price_cop")
+    .select(PRODUCT_COLUMNS)
     .eq("is_published", true)
+    .eq("is_featured", true)
     .order("created_at", { ascending: false })
-    .limit(8);
+    .limit(FEATURED_LIMIT);
 
-  const products = (productsData ?? []) as unknown as ProductRow[];
-  if (products.length === 0) return [];
+  const featured = (featuredData ?? []) as unknown as CatalogProductInput[];
+  let products = featured;
 
-  const designIds = products.map((p) => p.design_id).filter((id): id is string => Boolean(id));
-  const designsById = new Map<string, DesignRow>();
+  if (products.length < FEATURED_LIMIT) {
+    const { data: recentData } = await supabase
+      .from("products")
+      .select(PRODUCT_COLUMNS)
+      .eq("is_published", true)
+      .order("created_at", { ascending: false })
+      .limit(FEATURED_LIMIT);
 
-  if (designIds.length > 0) {
-    const { data: designsData } = await supabase
-      .from("designs")
-      .select("id, image_url")
-      .in("id", designIds);
-    for (const d of (designsData ?? []) as unknown as DesignRow[]) {
-      designsById.set(d.id, d);
-    }
+    const seen = new Set(products.map((p) => p.id));
+    const recent = ((recentData ?? []) as unknown as CatalogProductInput[]).filter((p) => !seen.has(p.id));
+    products = [...products, ...recent].slice(0, FEATURED_LIMIT);
   }
 
-  return products.map((p) => ({
-    slug: p.slug,
-    name: p.name,
-    imageUrl: p.design_id ? designsById.get(p.design_id)?.image_url ?? null : null,
-    priceCop: p.base_price_cop,
-    garmentType: p.garment_type,
-    technique: p.technique,
-  }));
+  if (products.length === 0) return [];
+  return attachCatalogData(supabase, products);
+}
+
+async function getBestsellerProducts(): Promise<ProductCardData[]> {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("products")
+    .select(PRODUCT_COLUMNS)
+    .eq("is_published", true)
+    .eq("is_bestseller", true)
+    .order("created_at", { ascending: false })
+    .limit(FEATURED_LIMIT);
+
+  const products = (data ?? []) as unknown as CatalogProductInput[];
+  if (products.length === 0) return [];
+  return attachCatalogData(supabase, products);
+}
+
+async function getActiveCollections(): Promise<CollectionTeaserRow[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("collections")
+    .select("id, name, slug, cover_image_url")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .limit(6);
+  return (data ?? []) as unknown as CollectionTeaserRow[];
 }
 
 export default async function HomePage() {
-  const featured = await getFeaturedProducts();
+  const [featured, bestsellers, collections] = await Promise.all([
+    getFeaturedProducts(),
+    getBestsellerProducts(),
+    getActiveCollections(),
+  ]);
 
   return (
     <main>
@@ -136,6 +162,32 @@ export default async function HomePage() {
         </Link>
       </section>
 
+      {/* Colecciones */}
+      {collections.length > 0 && (
+        <section className="max-w-6xl mx-auto px-6 pb-16">
+          <h2 className="font-display text-3xl mb-6">Colecciones</h2>
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {collections.map((c) => (
+              <Link
+                key={c.id}
+                href={`/catalogo?coleccion=${c.slug}`}
+                className="group relative shrink-0 w-56 aspect-[4/5] rounded-2xl overflow-hidden bg-ricamo-bone"
+              >
+                {c.cover_image_url ? (
+                  <Image src={c.cover_image_url} alt={c.name} fill className="object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
+                ) : (
+                  <div className="absolute inset-0 bg-ricamo-black/5" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0" />
+                <p className="absolute bottom-4 left-4 right-4 text-white font-display text-xl leading-tight">
+                  {c.name}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Destacados */}
       <section className="max-w-6xl mx-auto px-6 pb-20">
         <div className="flex items-end justify-between mb-8">
@@ -172,6 +224,26 @@ export default async function HomePage() {
           </div>
         )}
       </section>
+
+      {/* Mas vendidos */}
+      {bestsellers.length > 0 && (
+        <section className="max-w-6xl mx-auto px-6 pb-20">
+          <div className="flex items-end justify-between mb-8">
+            <h2 className="font-display text-3xl">Más vendidos</h2>
+            <Link
+              href="/catalogo"
+              className="text-sm font-semibold text-ricamo-red hover:underline underline-offset-4"
+            >
+              Ver todo el catálogo
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-8">
+            {bestsellers.map((product) => (
+              <ProductCard key={product.slug} product={product} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Como funciona */}
       <section className="bg-white border-y border-black/10">

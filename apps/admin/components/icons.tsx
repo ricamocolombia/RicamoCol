@@ -80,6 +80,28 @@ export function IconPalette(props: IconProps) {
   );
 }
 
+export function IconPhoto(props: IconProps) {
+  return base(
+    props,
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <circle cx="9" cy="10" r="1.6" fill="currentColor" stroke="none" />
+      <path d="M4 17.5 9.5 12.5a1.5 1.5 0 0 1 2 0l1.2 1.1M14.5 14 16 12.5a1.5 1.5 0 0 1 2.2.1L20 14.5" />
+    </>
+  );
+}
+
+export function IconLayers(props: IconProps) {
+  return base(
+    props,
+    <>
+      <path d="M12 3.5 20.5 8 12 12.5 3.5 8Z" />
+      <path d="M3.5 12 12 16.5 20.5 12" />
+      <path d="M3.5 16 12 20.5 20.5 16" />
+    </>
+  );
+}
+
 export function IconShoppingBag(props: IconProps) {
   return base(
     props,

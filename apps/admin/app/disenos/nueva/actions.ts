@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
+import { uploadDesignImage } from "../../../lib/storage";
 
 const VALID_TECHNIQUES = ["bordado", "estampado"] as const;
 const VALID_STATUSES = [
@@ -31,8 +32,8 @@ export async function crearDiseno(formData: FormData) {
   const technique = String(formData.get("technique") ?? "").trim();
   const status = String(formData.get("status") ?? "borrador").trim();
   const customerId = String(formData.get("customer_id") ?? "").trim();
-  const imageUrl = String(formData.get("image_url") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const images = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
 
   if (!name) {
     fail("El nombre del diseño es obligatorio");
@@ -46,17 +47,35 @@ export async function crearDiseno(formData: FormData) {
 
   const supabase = createServiceRoleClient();
 
-  const { error } = await supabase.from("designs").insert({
-    name,
-    technique,
-    status,
-    customer_id: customerId || null,
-    image_url: imageUrl || null,
-    notes: notes || null,
-  });
+  const { data: design, error } = await supabase
+    .from("designs")
+    .insert({
+      name,
+      technique,
+      status,
+      customer_id: customerId || null,
+      notes: notes || null,
+    })
+    .select("id")
+    .single();
 
-  if (error) {
-    fail("No se pudo crear el diseño: " + error.message);
+  if (error || !design) {
+    fail("No se pudo crear el diseño: " + (error?.message ?? "error desconocido"));
+  }
+
+  for (let i = 0; i < images.length; i++) {
+    try {
+      const imageUrl = await uploadDesignImage(images[i], "disenos");
+      await supabase.from("design_images").insert({
+        design_id: design.id,
+        image_url: imageUrl,
+        sort_order: i,
+        is_cover: i === 0,
+      });
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : "error desconocido";
+      redirect(`/disenos/${design.id}/editar?error=${encodeURIComponent("El diseño se creó, pero: " + message)}`);
+    }
   }
 
   redirect("/disenos");

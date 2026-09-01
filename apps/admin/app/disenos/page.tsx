@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
-import { updateDesignStatus, toggleEcommercePublish } from "./actions";
+import { updateDesignStatus } from "./actions";
 
 type DesignTechnique = "bordado" | "estampado";
 type DesignStatus =
@@ -34,6 +34,12 @@ interface ProductRow {
   design_id: string | null;
   is_published: boolean;
   base_price_cop: number;
+}
+
+interface DesignImageRow {
+  design_id: string;
+  image_url: string;
+  is_cover: boolean;
 }
 
 const TECHNIQUE_LABELS: Record<DesignTechnique, string> = {
@@ -93,6 +99,7 @@ export default async function DisenosPage({
     { data: designsData, error: designsError },
     { data: customersData },
     { data: productsData },
+    { data: imagesData },
   ] = await Promise.all([
     supabase
       .from("designs")
@@ -102,15 +109,27 @@ export default async function DisenosPage({
       .order("created_at", { ascending: false }),
     supabase.from("customers").select("id, full_name, phone"),
     supabase.from("products").select("id, design_id, is_published, base_price_cop"),
+    supabase.from("design_images").select("design_id, image_url, is_cover"),
   ]);
 
   const designs = (designsData ?? []) as unknown as DesignRow[];
   const customers = (customersData ?? []) as unknown as CustomerRow[];
   const products = (productsData ?? []) as unknown as ProductRow[];
+  const images = (imagesData ?? []) as unknown as DesignImageRow[];
   const customersById = new Map(customers.map((c) => [c.id, c]));
   const productByDesignId = new Map(
     products.filter((p) => p.design_id).map((p) => [p.design_id as string, p])
   );
+
+  // Portada de la galeria (is_cover), o la primera imagen si ninguna esta
+  // marcada, por diseño. Se resuelve una sola vez para toda la tabla.
+  const coverByDesignId = new Map<string, string>();
+  for (const img of images) {
+    const current = coverByDesignId.get(img.design_id);
+    if (!current || img.is_cover) {
+      coverByDesignId.set(img.design_id, img.image_url);
+    }
+  }
 
   return (
     <main className="px-6 py-10">
@@ -165,6 +184,7 @@ export default async function DisenosPage({
                 const forward = FORWARD_ACTION[design.status];
                 const product = productByDesignId.get(design.id);
                 const canPublish = PUBLISHABLE_STATUSES.includes(design.status);
+                const thumbnail = coverByDesignId.get(design.id) ?? design.image_url;
 
                 return (
                   <tr
@@ -173,10 +193,10 @@ export default async function DisenosPage({
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        {design.image_url ? (
+                        {thumbnail ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={design.image_url}
+                            src={thumbnail}
                             alt={design.name}
                             className="w-10 h-10 rounded-lg object-cover border border-neutral-200 flex-shrink-0"
                           />
@@ -303,19 +323,12 @@ export default async function DisenosPage({
                         )}
 
                         {product ? (
-                          <form action={toggleEcommercePublish}>
-                            <input type="hidden" name="design_id" value={design.id} />
-                            <button
-                              type="submit"
-                              className={`w-full text-xs rounded-lg px-2 py-1.5 border ${
-                                product.is_published
-                                  ? "border-neutral-300 text-neutral-600 hover:border-ricamo-red hover:text-ricamo-red"
-                                  : "border-ricamo-black text-ricamo-black hover:bg-ricamo-black hover:text-white"
-                              }`}
-                            >
-                              {product.is_published ? "Despublicar" : "Publicar"}
-                            </button>
-                          </form>
+                          <Link
+                            href="/catalogo"
+                            className="w-full text-xs text-center rounded-lg px-2 py-1.5 border border-neutral-300 text-neutral-600 hover:border-ricamo-black hover:text-ricamo-black"
+                          >
+                            Gestionar en Catálogo
+                          </Link>
                         ) : canPublish ? (
                           <Link
                             href={`/disenos/${design.id}/publicar`}

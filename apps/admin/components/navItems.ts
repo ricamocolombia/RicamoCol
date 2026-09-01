@@ -5,8 +5,10 @@ import {
   IconBank,
   IconBuilding,
   IconCart,
+  IconLayers,
   IconMegaphone,
   IconPalette,
+  IconPhoto,
   IconSettings,
   IconShoppingBag,
   IconSupplier,
@@ -19,6 +21,10 @@ export interface NavItem {
   href: string;
   label: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
+  // Solo hace match exacto de ruta, no por prefijo -- para el caso de
+  // Catálogo/Colecciones, donde /catalogo/colecciones tiene su propia
+  // entrada y no debe resaltar tambien "Catálogo" al mismo tiempo.
+  exact?: boolean;
 }
 
 export interface NavGroup {
@@ -37,6 +43,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/clientes", label: "Clientes", icon: IconUsers },
       { href: "/campanas", label: "Campañas", icon: IconMegaphone },
       { href: "/disenos", label: "Diseños", icon: IconPalette },
+      { href: "/catalogo", label: "Catálogo", icon: IconPhoto, exact: true },
+      { href: "/catalogo/colecciones", label: "Colecciones", icon: IconLayers },
     ],
   },
   {

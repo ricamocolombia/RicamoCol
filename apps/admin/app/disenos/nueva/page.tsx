@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 import { crearDiseno } from "./actions";
+import { ImageDropzone } from "../../../components/ImageDropzone";
 
 interface CustomerRow {
   id: string;
@@ -126,23 +127,10 @@ export default async function NuevoDisenoPage({
           </div>
 
           <div>
-            <label
-              htmlFor="image_url"
-              className="block text-sm font-medium mb-1"
-            >
-              URL de la imagen
+            <label className="block text-sm font-medium mb-1">
+              Imágenes del diseño
             </label>
-            <input
-              id="image_url"
-              name="image_url"
-              type="text"
-              placeholder="https://..."
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
-            />
-            <p className="text-xs text-neutral-500 mt-1">
-              Por ahora solo se acepta un enlace a una imagen ya subida en
-              otro lugar (todavía no hay carga de archivos / Storage).
-            </p>
+            <ImageDropzone name="images" multiple />
           </div>
 
           <div>

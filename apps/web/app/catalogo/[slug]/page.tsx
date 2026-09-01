@@ -47,19 +47,29 @@ export default async function ProductoPage({
 
   const product = productData as unknown as ProductRow;
 
-  const [{ data: variantsData }, { data: designData }] = await Promise.all([
+  const [{ data: variantsData }, { data: galleryData }, { data: designData }] = await Promise.all([
     supabase
       .from("product_variants")
       .select("id, size, color, price_cop, stock_quantity")
       .eq("product_id", product.id)
       .order("size", { ascending: true }),
     product.design_id
+      ? supabase
+          .from("design_images")
+          .select("id, image_url, is_cover")
+          .eq("design_id", product.design_id)
+          .order("is_cover", { ascending: false })
+      : Promise.resolve({ data: [] }),
+    product.design_id
       ? supabase.from("designs").select("image_url").eq("id", product.design_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 
   const variants = (variantsData ?? []) as unknown as VariantRow[];
-  const imageUrl = (designData as { image_url: string | null } | null)?.image_url ?? null;
+  const gallery = (galleryData ?? []) as unknown as { id: string; image_url: string }[];
+  const legacyImageUrl = (designData as { image_url: string | null } | null)?.image_url ?? null;
+  const images = gallery.length > 0 ? gallery.map((g) => g.image_url) : legacyImageUrl ? [legacyImageUrl] : [];
+  const [mainImageUrl, ...restImages] = images;
 
   const sizes = [...new Set(variants.map((v) => v.size))];
   const colors = [...new Set(variants.map((v) => v.color).filter((c): c is string => Boolean(c)))];
@@ -80,31 +90,49 @@ export default async function ProductoPage({
       </Link>
 
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
-        <div className="relative aspect-[4/5] rounded-3xl overflow-hidden bg-ricamo-bone">
-          {imageUrl ? (
-            <Image
-              src={imageUrl}
-              alt={product.name}
-              fill
-              sizes="(min-width: 1024px) 50vw, 100vw"
-              priority
-              className="object-cover"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <svg
-                width="80"
-                height="80"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="text-ricamo-black/15"
-                aria-hidden="true"
-              >
-                <path d="M8 3 6 6H4a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2l-2-3H8Z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
+        <div>
+          <div className="relative aspect-[4/5] rounded-3xl overflow-hidden bg-ricamo-bone">
+            {mainImageUrl ? (
+              <Image
+                src={mainImageUrl}
+                alt={product.name}
+                fill
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                priority
+                className="object-cover"
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg
+                  width="80"
+                  height="80"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="text-ricamo-black/15"
+                  aria-hidden="true"
+                >
+                  <path d="M8 3 6 6H4a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2l-2-3H8Z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              </div>
+            )}
+          </div>
+
+          {restImages.length > 0 && (
+            <div className="grid grid-cols-3 gap-3 mt-3">
+              {restImages.map((url, i) => (
+                <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-ricamo-bone">
+                  <Image
+                    src={url}
+                    alt={`${product.name} — foto ${i + 2}`}
+                    fill
+                    sizes="20vw"
+                    className="object-cover"
+                  />
+                </div>
+              ))}
             </div>
           )}
         </div>

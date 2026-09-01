@@ -9,7 +9,14 @@ export interface ProductCardData {
   priceCop: number;
   garmentType: string;
   technique: string;
+  badge?: "nuevo" | "mas_vendido";
+  collectionName?: string | null;
 }
+
+const BADGE_LABELS: Record<NonNullable<ProductCardData["badge"]>, string> = {
+  nuevo: "Nuevo",
+  mas_vendido: "Más vendido",
+};
 
 export function ProductCard({ product }: { product: ProductCardData }) {
   return (
@@ -46,8 +53,18 @@ export function ProductCard({ product }: { product: ProductCardData }) {
         <span className="absolute top-3 left-3 inline-block rounded-full bg-white/90 backdrop-blur px-3 py-1 text-xs font-semibold text-ricamo-black">
           {TECHNIQUE_LABELS[product.technique] ?? product.technique}
         </span>
+        {product.badge && (
+          <span className="absolute top-3 right-3 inline-block rounded-full bg-ricamo-red px-3 py-1 text-xs font-semibold text-white">
+            {BADGE_LABELS[product.badge]}
+          </span>
+        )}
       </div>
       <div className="mt-3">
+        {product.collectionName && (
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-ricamo-red/80 mb-0.5">
+            {product.collectionName}
+          </p>
+        )}
         <p className="font-semibold text-sm leading-snug group-hover:text-ricamo-red transition-colors">
           {product.name}
         </p>

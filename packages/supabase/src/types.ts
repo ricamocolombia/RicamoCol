@@ -209,6 +209,9 @@ export interface Database {
           technique: "bordado" | "estampado";
           base_price_cop: number;
           is_published: boolean;
+          collection_id: Uuid | null;
+          is_featured: boolean;
+          is_bestseller: boolean;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -222,10 +225,65 @@ export interface Database {
           technique: "bordado" | "estampado";
           base_price_cop: number;
           is_published?: boolean;
+          collection_id?: Uuid | null;
+          is_featured?: boolean;
+          is_bestseller?: boolean;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
         Update: Partial<Database["public"]["Tables"]["products"]["Insert"]>;
+        Relationships: [];
+      };
+
+      design_images: {
+        Row: {
+          id: Uuid;
+          design_id: Uuid;
+          image_url: string;
+          sort_order: number;
+          is_cover: boolean;
+          created_at: Timestamp;
+        };
+        Insert: {
+          id?: Uuid;
+          design_id: Uuid;
+          image_url: string;
+          sort_order?: number;
+          is_cover?: boolean;
+          created_at?: Timestamp;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["design_images"]["Insert"]
+        >;
+        Relationships: [];
+      };
+
+      collections: {
+        Row: {
+          id: Uuid;
+          name: string;
+          slug: string;
+          description: string | null;
+          cover_image_url: string | null;
+          is_active: boolean;
+          sort_order: number;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: Uuid;
+          name: string;
+          slug: string;
+          description?: string | null;
+          cover_image_url?: string | null;
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["collections"]["Insert"]
+        >;
         Relationships: [];
       };
 
