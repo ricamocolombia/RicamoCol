@@ -104,8 +104,8 @@ export async function crearVenta(formData: FormData) {
   const size = String(formData.get("size") ?? "").trim();
 
   const techniqueRaw = String(formData.get("technique") ?? "").trim();
-  const printSizeRaw = String(formData.get("print_size") ?? "").trim();
-  const costRaw = String(formData.get("cost_cop") ?? "").trim();
+  const decorationPrintSizesRaw = formData.getAll("decoration_print_size").map((v) => String(v).trim());
+  const decorationCostsRaw = formData.getAll("decoration_cost_cop").map((v) => String(v).trim());
 
   const bankAccountId = String(formData.get("bank_account_id") ?? "").trim();
   const amountReceivedRaw = String(formData.get("amount_received_cop") ?? "").trim();
@@ -139,9 +139,6 @@ export async function crearVenta(formData: FormData) {
   if (techniqueRaw && !isTechnique(techniqueRaw)) {
     fail("Técnica inválida");
   }
-  if (printSizeRaw && !isPrintSize(printSizeRaw)) {
-    fail("Tamaño de estampado inválido");
-  }
   if (shippingTypeRaw && !isShippingType(shippingTypeRaw)) {
     fail("Tipo de envío inválido");
   }
@@ -149,7 +146,6 @@ export async function crearVenta(formData: FormData) {
     fail("Estado de pago del domicilio inválido");
   }
   const technique: Technique | null = techniqueRaw ? (techniqueRaw as Technique) : null;
-  const printSize: PrintSize | null = printSizeRaw ? (printSizeRaw as PrintSize) : null;
   const shippingType: ShippingType | null = shippingTypeRaw
     ? (shippingTypeRaw as ShippingType)
     : null;
@@ -157,10 +153,29 @@ export async function crearVenta(formData: FormData) {
     ? (shippingPaymentStatusRaw as ShippingPaymentStatus)
     : null;
 
-  const cost = costRaw ? Number.parseInt(costRaw, 10) : null;
-  if (cost !== null && (!Number.isFinite(cost) || cost < 0)) {
-    fail("El costo de la decoración debe ser un número válido");
+  // Una prenda puede llevar mas de una decoracion (ej. estampado punto
+  // corazon adelante + estampado carta atras) -- cada linea con formulario
+  // llega pareada por indice (decoration_print_size[i] con
+  // decoration_cost_cop[i]). Las lineas sin costo se ignoran (filas vacias
+  // que el admin no llego a borrar).
+  const decorations: { printSize: PrintSize | null; costCop: number }[] = [];
+  for (let i = 0; i < decorationCostsRaw.length; i++) {
+    const costLine = decorationCostsRaw[i];
+    if (!costLine) continue;
+    const costLineValue = Number.parseInt(costLine, 10);
+    if (!Number.isFinite(costLineValue) || costLineValue < 0) {
+      fail("El costo de cada línea de decoración debe ser un número válido");
+    }
+    const sizeLine = decorationPrintSizesRaw[i] ?? "";
+    if (sizeLine && !isPrintSize(sizeLine)) {
+      fail("Tamaño de estampado inválido");
+    }
+    decorations.push({
+      printSize: sizeLine ? (sizeLine as PrintSize) : null,
+      costCop: costLineValue,
+    });
   }
+  const cost = decorations.length > 0 ? decorations.reduce((sum, d) => sum + d.costCop, 0) : null;
 
   const requiresPayment = paymentStatus !== "pendiente";
   const amountReceived = amountReceivedRaw ? Number.parseInt(amountReceivedRaw, 10) : 0;
@@ -226,24 +241,46 @@ export async function crearVenta(formData: FormData) {
 
   const orderId = order.id;
 
-  const { error: itemError } = await supabase.from("order_items").insert({
-    order_id: orderId,
-    description: itemDescription,
-    quantity: itemQuantity,
-    unit_price_cop: itemUnitPrice,
-    garment_type: garmentType || null,
-    design_category: designCategory || null,
-    color: color || null,
-    size: size || null,
-    technique,
-    print_size: printSize,
-    cost_cop: cost,
-  });
+  const { data: item, error: itemError } = await supabase
+    .from("order_items")
+    .insert({
+      order_id: orderId,
+      description: itemDescription,
+      quantity: itemQuantity,
+      unit_price_cop: itemUnitPrice,
+      garment_type: garmentType || null,
+      design_category: designCategory || null,
+      color: color || null,
+      size: size || null,
+      technique,
+      // El tamaño ya no vive aca -- puede haber varios, ver
+      // order_item_decorations mas abajo.
+      print_size: null,
+      cost_cop: cost,
+    })
+    .select("id")
+    .single();
 
-  if (itemError) {
+  if (itemError || !item) {
     fail(
-      "La venta se creó pero no se pudo guardar el detalle: " + itemError.message
+      "La venta se creó pero no se pudo guardar el detalle: " + (itemError?.message ?? "error desconocido")
     );
+  }
+
+  if (decorations.length > 0) {
+    const { error: decorationsError } = await supabase.from("order_item_decorations").insert(
+      decorations.map((d) => ({
+        order_item_id: item.id,
+        print_size: d.printSize,
+        cost_cop: d.costCop,
+      }))
+    );
+
+    if (decorationsError) {
+      fail(
+        "La venta se creó pero no se pudo guardar el detalle de la decoración: " + decorationsError.message
+      );
+    }
   }
 
   // Cuenta por pagar automatica al proveedor de produccion (estampado o

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 import { crearVenta } from "./actions";
-import { currencyFormatter } from "../../../lib/metrics";
+import { DecorationLinesField } from "../../../components/DecorationLinesField";
 
 interface CustomerRow {
   id: string;
@@ -28,14 +28,6 @@ interface PrintSizePriceRow {
   print_size: PrintSize;
   cost_cop: number | null;
 }
-
-const PRINT_SIZE_LABELS: Record<PrintSize, string> = {
-  punto_corazon: "Punto corazón",
-  media_carta: "Media carta",
-  carta: "Carta",
-  oficio: "Oficio",
-  tabloide: "Tabloide",
-};
 
 // Datos en vivo del negocio: nunca prerenderizar de forma estatica.
 export const dynamic = "force-dynamic";
@@ -100,7 +92,9 @@ export default async function NuevaVentaPage({
     size: string | null;
   }[];
   const printPrices = (printPricesData ?? []) as unknown as PrintSizePriceRow[];
-  const printPricesBySize = new Map(printPrices.map((p) => [p.print_size, p.cost_cop]));
+  const printPricesBySize: Record<string, number | null> = Object.fromEntries(
+    printPrices.map((p) => [p.print_size, p.cost_cop])
+  );
 
   const garmentTypeOptions = mergeSuggestions(
     SEED_GARMENT_TYPES,
@@ -413,68 +407,34 @@ export default async function NuevaVentaPage({
             para calcular la rentabilidad bruta de la venta en el Dashboard.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="technique" className="block text-sm font-medium mb-1">
-                Técnica
-              </label>
-              <select
-                id="technique"
-                name="technique"
-                defaultValue=""
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2"
-              >
-                <option value="">— Sin definir —</option>
-                <option value="estampado">Estampado</option>
-                <option value="bordado">Bordado</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="print_size" className="block text-sm font-medium mb-1">
-                Tamaño de estampado (si aplica)
-              </label>
-              <select
-                id="print_size"
-                name="print_size"
-                defaultValue=""
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2"
-              >
-                <option value="">— No aplica —</option>
-                {(Object.keys(PRINT_SIZE_LABELS) as PrintSize[]).map((size) => {
-                  const cost = printPricesBySize.get(size);
-                  return (
-                    <option key={size} value={size}>
-                      {PRINT_SIZE_LABELS[size]}
-                      {cost != null
-                        ? ` (ref. ${currencyFormatter.format(cost)})`
-                        : " (costo sin definir — ver Configuración)"}
-                    </option>
-                  );
-                })}
-              </select>
-              <p className="text-xs text-neutral-500 mt-1">
-                Los costos de referencia se actualizan en{" "}
-                <Link href="/configuracion" className="underline">
-                  Configuración
-                </Link>
-                .
-              </p>
-            </div>
+          <div>
+            <label htmlFor="technique" className="block text-sm font-medium mb-1">
+              Técnica
+            </label>
+            <select
+              id="technique"
+              name="technique"
+              defaultValue=""
+              className="w-full sm:w-1/2 rounded-lg border border-neutral-300 px-3 py-2"
+            >
+              <option value="">— Sin definir —</option>
+              <option value="estampado">Estampado</option>
+              <option value="bordado">Bordado</option>
+            </select>
           </div>
 
           <div>
-            <label htmlFor="cost_cop" className="block text-sm font-medium mb-1">
-              Costo unitario de la decoración (COP)
+            <label className="block text-sm font-medium mb-1">
+              Decoración (una línea por cada estampado/bordado de la prenda)
             </label>
-            <input
-              id="cost_cop"
-              name="cost_cop"
-              type="number"
-              min={0}
-              step={1}
-              placeholder="Ej: 5000"
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
-            />
+            <DecorationLinesField printPricesBySize={printPricesBySize} />
+            <p className="text-xs text-neutral-500 mt-2">
+              Los costos de referencia se actualizan en{" "}
+              <Link href="/configuracion" className="underline">
+                Configuración
+              </Link>
+              .
+            </p>
           </div>
         </section>
 

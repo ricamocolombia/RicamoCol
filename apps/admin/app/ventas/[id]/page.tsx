@@ -55,6 +55,22 @@ interface ItemRow {
   cost_cop: number | null;
 }
 
+type PrintSize = "punto_corazon" | "media_carta" | "carta" | "oficio" | "tabloide";
+
+interface DecorationRow {
+  order_item_id: string;
+  print_size: PrintSize | null;
+  cost_cop: number;
+}
+
+const PRINT_SIZE_LABELS: Record<PrintSize, string> = {
+  punto_corazon: "Punto corazón",
+  media_carta: "Media carta",
+  carta: "Carta",
+  oficio: "Oficio",
+  tabloide: "Tabloide",
+};
+
 const TIMELINE_STEPS: { status: OrderStatus; label: string }[] = [
   { status: "pendiente", label: "Pendiente" },
   { status: "confirmado", label: "Confirmado" },
@@ -136,6 +152,22 @@ export default async function DetalleVentaPage({
   const customer = customerData as unknown as CustomerRow | null;
   const courier = courierData as unknown as CourierRow | null;
   const items = (itemsData ?? []) as unknown as ItemRow[];
+
+  const itemIds = items.map((item) => item.id);
+  const { data: decorationsData } =
+    itemIds.length > 0
+      ? await supabase
+          .from("order_item_decorations")
+          .select("order_item_id, print_size, cost_cop")
+          .in("order_item_id", itemIds)
+      : { data: [] };
+  const decorations = (decorationsData ?? []) as unknown as DecorationRow[];
+  const decorationsByItemId = new Map<string, DecorationRow[]>();
+  for (const d of decorations) {
+    const list = decorationsByItemId.get(d.order_item_id) ?? [];
+    list.push(d);
+    decorationsByItemId.set(d.order_item_id, list);
+  }
 
   const isCancelled = order.status === "cancelado";
   const isDelivered = order.status === "entregado";
@@ -307,24 +339,41 @@ export default async function DetalleVentaPage({
               <th className="px-6 py-3 font-medium">Técnica</th>
               <th className="px-6 py-3 font-medium">Cant.</th>
               <th className="px-6 py-3 font-medium">Precio unit.</th>
+              <th className="px-6 py-3 font-medium">Costo producción</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={item.id} className="border-b border-neutral-100 last:border-0">
-                <td className="px-6 py-3">
-                  <p className="font-medium">{item.description ?? "—"}</p>
-                  <p className="text-xs text-neutral-500">
-                    {[item.garment_type, item.color, item.size ? `talla ${item.size}` : null, item.design_category]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </td>
-                <td className="px-6 py-3 text-neutral-600">{item.technique ?? "—"}</td>
-                <td className="px-6 py-3">{item.quantity}</td>
-                <td className="px-6 py-3">{currencyFormatter.format(item.unit_price_cop)}</td>
-              </tr>
-            ))}
+            {items.map((item) => {
+              const itemDecorations = decorationsByItemId.get(item.id) ?? [];
+              return (
+                <tr key={item.id} className="border-b border-neutral-100 last:border-0">
+                  <td className="px-6 py-3">
+                    <p className="font-medium">{item.description ?? "—"}</p>
+                    <p className="text-xs text-neutral-500">
+                      {[item.garment_type, item.color, item.size ? `talla ${item.size}` : null, item.design_category]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </td>
+                  <td className="px-6 py-3 text-neutral-600">{item.technique ?? "—"}</td>
+                  <td className="px-6 py-3">{item.quantity}</td>
+                  <td className="px-6 py-3">{currencyFormatter.format(item.unit_price_cop)}</td>
+                  <td className="px-6 py-3">
+                    {item.cost_cop != null ? currencyFormatter.format(item.cost_cop) : "—"}
+                    {itemDecorations.length > 1 && (
+                      <p className="text-xs text-neutral-500 mt-0.5">
+                        {itemDecorations
+                          .map(
+                            (d) =>
+                              `${d.print_size ? PRINT_SIZE_LABELS[d.print_size] : "Sin tamaño"}: ${currencyFormatter.format(d.cost_cop)}`
+                          )
+                          .join(" + ")}
+                      </p>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         <div className="px-6 py-4 border-t border-neutral-100 flex justify-between items-center">

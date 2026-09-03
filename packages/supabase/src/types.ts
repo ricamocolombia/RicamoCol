@@ -655,6 +655,39 @@ export interface Database {
         Relationships: [];
       };
 
+      order_item_decorations: {
+        Row: {
+          id: Uuid;
+          order_item_id: Uuid;
+          print_size:
+            | "punto_corazon"
+            | "media_carta"
+            | "carta"
+            | "oficio"
+            | "tabloide"
+            | null;
+          cost_cop: number;
+          created_at: Timestamp;
+        };
+        Insert: {
+          id?: Uuid;
+          order_item_id: Uuid;
+          print_size?:
+            | "punto_corazon"
+            | "media_carta"
+            | "carta"
+            | "oficio"
+            | "tabloide"
+            | null;
+          cost_cop: number;
+          created_at?: Timestamp;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["order_item_decorations"]["Insert"]
+        >;
+        Relationships: [];
+      };
+
       deliveries: {
         Row: {
           id: Uuid;
