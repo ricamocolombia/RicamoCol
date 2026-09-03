@@ -3,6 +3,7 @@ import Link from "next/link";
 
 const NAV_LINKS = [
   { href: "/catalogo", label: "Catálogo" },
+  { href: "/regalos", label: "Regalos" },
   { href: "/personalizados", label: "Personaliza tu prenda" },
   { href: "/sobre-maria-jose", label: "Maria Jose" },
 ];

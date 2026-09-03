@@ -91,6 +91,18 @@ export function IconPhoto(props: IconProps) {
   );
 }
 
+export function IconGift(props: IconProps) {
+  return base(
+    props,
+    <>
+      <rect x="3.5" y="9" width="17" height="4" rx="1" />
+      <rect x="4.5" y="13" width="15" height="7" rx="1" />
+      <path d="M12 9v11" />
+      <path d="M12 9c-1.2 0-3.5-.6-3.5-3S10.6 3.5 12 5.5c1.4-2 3.5-1.9 3.5.5S13.2 9 12 9Z" />
+    </>
+  );
+}
+
 export function IconLayers(props: IconProps) {
   return base(
     props,

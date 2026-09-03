@@ -287,6 +287,46 @@ export interface Database {
         Relationships: [];
       };
 
+      gift_segments: {
+        Row: {
+          id: Uuid;
+          name: string;
+          slug: string;
+          is_active: boolean;
+          sort_order: number;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: Uuid;
+          name: string;
+          slug: string;
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["gift_segments"]["Insert"]
+        >;
+        Relationships: [];
+      };
+
+      product_gift_segments: {
+        Row: {
+          product_id: Uuid;
+          gift_segment_id: Uuid;
+        };
+        Insert: {
+          product_id: Uuid;
+          gift_segment_id: Uuid;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["product_gift_segments"]["Insert"]
+        >;
+        Relationships: [];
+      };
+
       product_variants: {
         Row: {
           id: Uuid;

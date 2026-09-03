@@ -5,6 +5,7 @@ import {
   IconBank,
   IconBuilding,
   IconCart,
+  IconGift,
   IconLayers,
   IconMegaphone,
   IconPalette,
@@ -45,6 +46,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/disenos", label: "Diseños", icon: IconPalette },
       { href: "/catalogo", label: "Catálogo", icon: IconPhoto, exact: true },
       { href: "/catalogo/colecciones", label: "Colecciones", icon: IconLayers },
+      { href: "/catalogo/regalos", label: "Regalos", icon: IconGift },
     ],
   },
   {

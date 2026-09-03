@@ -33,6 +33,16 @@ interface DesignImageRow {
   is_cover: boolean;
 }
 
+interface GiftSegmentRow {
+  id: string;
+  name: string;
+}
+
+interface ProductGiftSegmentRow {
+  product_id: string;
+  gift_segment_id: string;
+}
+
 const currencyFormatter = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
@@ -52,6 +62,8 @@ export default async function CatalogoPage({
     { data: collectionsData },
     { data: designsData },
     { data: imagesData },
+    { data: giftSegmentsData },
+    { data: productGiftSegmentsData },
   ] = await Promise.all([
     supabase
       .from("products")
@@ -62,12 +74,16 @@ export default async function CatalogoPage({
     supabase.from("collections").select("id, name").order("name", { ascending: true }),
     supabase.from("designs").select("id, image_url"),
     supabase.from("design_images").select("design_id, image_url, is_cover"),
+    supabase.from("gift_segments").select("id, name").eq("is_active", true).order("sort_order", { ascending: true }),
+    supabase.from("product_gift_segments").select("product_id, gift_segment_id"),
   ]);
 
   const products = (productsData ?? []) as unknown as ProductRow[];
   const collections = (collectionsData ?? []) as unknown as CollectionRow[];
   const designs = (designsData ?? []) as unknown as DesignRow[];
   const images = (imagesData ?? []) as unknown as DesignImageRow[];
+  const giftSegments = (giftSegmentsData ?? []) as unknown as GiftSegmentRow[];
+  const productGiftSegments = (productGiftSegmentsData ?? []) as unknown as ProductGiftSegmentRow[];
 
   const designImageById = new Map(designs.map((d) => [d.id, d.image_url]));
   const coverByDesignId = new Map<string, string>();
@@ -76,6 +92,13 @@ export default async function CatalogoPage({
     if (!current || img.is_cover) {
       coverByDesignId.set(img.design_id, img.image_url);
     }
+  }
+
+  const segmentIdsByProductId = new Map<string, Set<string>>();
+  for (const row of productGiftSegments) {
+    const set = segmentIdsByProductId.get(row.product_id) ?? new Set<string>();
+    set.add(row.gift_segment_id);
+    segmentIdsByProductId.set(row.product_id, set);
   }
 
   return (
@@ -88,12 +111,20 @@ export default async function CatalogoPage({
             publicación de cada producto.
           </p>
         </div>
-        <Link
-          href="/catalogo/colecciones"
-          className="bg-ricamo-black text-white font-semibold rounded-lg px-4 py-2 whitespace-nowrap"
-        >
-          Gestionar colecciones
-        </Link>
+        <div className="flex gap-3">
+          <Link
+            href="/catalogo/regalos"
+            className="bg-white border border-neutral-300 text-ricamo-black font-semibold rounded-lg px-4 py-2 whitespace-nowrap"
+          >
+            Gestionar regalos
+          </Link>
+          <Link
+            href="/catalogo/colecciones"
+            className="bg-ricamo-black text-white font-semibold rounded-lg px-4 py-2 whitespace-nowrap"
+          >
+            Gestionar colecciones
+          </Link>
+        </div>
       </div>
 
       {error && <p className="text-sm text-ricamo-red mb-4">{error}</p>}
@@ -184,6 +215,30 @@ export default async function CatalogoPage({
                           />
                           Más vendido
                         </label>
+                        {giftSegments.length > 0 && (
+                          <div className="w-full">
+                            <label className="block text-xs text-neutral-500 mb-1">
+                              Regalo para
+                            </label>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1">
+                              {giftSegments.map((segment) => (
+                                <label
+                                  key={segment.id}
+                                  className="flex items-center gap-1.5 text-xs text-neutral-600"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    name="gift_segment_ids"
+                                    value={segment.id}
+                                    defaultChecked={segmentIdsByProductId.get(product.id)?.has(segment.id) ?? false}
+                                    className="rounded border-neutral-300"
+                                  />
+                                  {segment.name}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         <button
                           type="submit"
                           className="text-xs font-semibold text-ricamo-black bg-ricamo-yellow rounded-lg px-3 py-1.5 whitespace-nowrap"

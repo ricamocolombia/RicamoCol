@@ -89,3 +89,57 @@ export async function attachCatalogData(
     };
   });
 }
+
+export interface GiftSegmentWithProducts {
+  id: string;
+  name: string;
+  slug: string;
+  products: ProductCardData[];
+}
+
+// Para la pagina /regalos: cada segmento activo (para parejas, para
+// familiares...) con sus productos publicados. Un producto puede aparecer
+// en varios segmentos a la vez (relacion muchos-a-muchos).
+export async function getGiftSegmentsWithProducts(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<GiftSegmentWithProducts[]> {
+  const { data: segmentsData } = await supabase
+    .from("gift_segments")
+    .select("id, name, slug")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+
+  const segments = (segmentsData ?? []) as { id: string; name: string; slug: string }[];
+  if (segments.length === 0) return [];
+
+  const { data: linksData } = await supabase
+    .from("product_gift_segments")
+    .select("product_id, gift_segment_id")
+    .in("gift_segment_id", segments.map((s) => s.id));
+
+  const links = (linksData ?? []) as { product_id: string; gift_segment_id: string }[];
+  const productIds = [...new Set(links.map((l) => l.product_id))];
+  if (productIds.length === 0) return segments.map((s) => ({ ...s, products: [] }));
+
+  const { data: productsData } = await supabase
+    .from("products")
+    .select(
+      "id, design_id, name, slug, garment_type, technique, base_price_cop, collection_id, is_bestseller, created_at"
+    )
+    .eq("is_published", true)
+    .in("id", productIds);
+
+  const products = (productsData ?? []) as unknown as CatalogProductInput[];
+  const enriched = await attachCatalogData(supabase, products);
+  const cardByProductId = new Map(products.map((p, i) => [p.id, enriched[i]]));
+
+  return segments.map((segment) => {
+    const segmentProductIds = links
+      .filter((l) => l.gift_segment_id === segment.id)
+      .map((l) => l.product_id);
+    const cards = segmentProductIds
+      .map((id) => cardByProductId.get(id))
+      .filter((c): c is ProductCardData => Boolean(c));
+    return { ...segment, products: cards };
+  });
+}

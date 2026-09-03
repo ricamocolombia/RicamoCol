@@ -15,6 +15,7 @@ export async function actualizarProductoCatalogo(formData: FormData) {
   const collectionId = String(formData.get("collection_id") ?? "").trim();
   const isFeatured = formData.get("is_featured") === "on";
   const isBestseller = formData.get("is_bestseller") === "on";
+  const giftSegmentIds = formData.getAll("gift_segment_ids").map(String).filter(Boolean);
 
   if (!id) {
     fail("Producto inválido");
@@ -33,6 +34,27 @@ export async function actualizarProductoCatalogo(formData: FormData) {
 
   if (error) {
     fail("No se pudo actualizar el producto: " + error.message);
+  }
+
+  // Reemplaza por completo los segmentos de regalo del producto -- mas
+  // simple que calcular el diff entre lo que habia y lo marcado ahora.
+  const { error: deleteError } = await supabase
+    .from("product_gift_segments")
+    .delete()
+    .eq("product_id", id);
+
+  if (deleteError) {
+    fail("El producto se actualizó pero no se pudieron limpiar sus segmentos de regalo: " + deleteError.message);
+  }
+
+  if (giftSegmentIds.length > 0) {
+    const { error: insertError } = await supabase
+      .from("product_gift_segments")
+      .insert(giftSegmentIds.map((giftSegmentId) => ({ product_id: id, gift_segment_id: giftSegmentId })));
+
+    if (insertError) {
+      fail("El producto se actualizó pero no se pudieron guardar sus segmentos de regalo: " + insertError.message);
+    }
   }
 
   redirect("/catalogo");
