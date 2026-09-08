@@ -7,6 +7,7 @@ export const currencyFormatter = new Intl.NumberFormat("es-CO", {
 export const GARMENT_LABELS: Record<string, string> = {
   camiseta: "Camiseta",
   buzo: "Buzo",
+  "tank top": "Tank top",
 };
 
 export const TECHNIQUE_LABELS: Record<string, string> = {

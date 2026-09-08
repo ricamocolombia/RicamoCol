@@ -12,7 +12,6 @@ interface CollectionRow {
   slug: string;
 }
 
-const GARMENT_FILTERS = ["camiseta", "buzo"];
 const TECHNIQUE_FILTERS = ["bordado", "estampado"];
 
 export default async function CatalogoPage({
@@ -23,12 +22,18 @@ export default async function CatalogoPage({
   const { tecnica, prenda, coleccion } = await searchParams;
   const supabase = await createClient();
 
-  const { data: collectionsData } = await supabase
-    .from("collections")
-    .select("id, name, slug")
-    .order("sort_order", { ascending: true });
+  const [{ data: collectionsData }, { data: garmentTypesData }] = await Promise.all([
+    supabase.from("collections").select("id, name, slug").order("sort_order", { ascending: true }),
+    supabase.from("products").select("garment_type").eq("is_published", true),
+  ]);
   const collections = (collectionsData ?? []) as unknown as CollectionRow[];
   const activeCollection = coleccion ? collections.find((c) => c.slug === coleccion) : undefined;
+
+  const GARMENT_FILTERS = [
+    ...new Set(
+      ((garmentTypesData ?? []) as unknown as { garment_type: string }[]).map((p) => p.garment_type)
+    ),
+  ].sort((a, b) => a.localeCompare(b, "es"));
 
   let query = supabase
     .from("products")

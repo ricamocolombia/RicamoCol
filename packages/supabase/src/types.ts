@@ -159,7 +159,7 @@ export interface Database {
         Row: {
           id: Uuid;
           customer_id: Uuid | null;
-          garment_type: "camiseta" | "buzo";
+          garment_type: string;
           technique: "bordado" | "estampado";
           size: string | null;
           quantity: number;
@@ -177,7 +177,7 @@ export interface Database {
         Insert: {
           id?: Uuid;
           customer_id?: Uuid | null;
-          garment_type: "camiseta" | "buzo";
+          garment_type: string;
           technique: "bordado" | "estampado";
           size?: string | null;
           quantity?: number;
@@ -205,7 +205,7 @@ export interface Database {
           name: string;
           slug: string;
           description: string | null;
-          garment_type: "camiseta" | "buzo";
+          garment_type: string;
           technique: "bordado" | "estampado";
           base_price_cop: number;
           is_published: boolean;
@@ -221,7 +221,7 @@ export interface Database {
           name: string;
           slug: string;
           description?: string | null;
-          garment_type: "camiseta" | "buzo";
+          garment_type: string;
           technique: "bordado" | "estampado";
           base_price_cop: number;
           is_published?: boolean;

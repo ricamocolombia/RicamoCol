@@ -91,16 +91,20 @@ export default async function PersonalizadosPage({
               <label htmlFor="garment_type" className="block text-sm font-medium mb-1">
                 Prenda *
               </label>
-              <select
+              <input
                 id="garment_type"
                 name="garment_type"
+                type="text"
                 required
-                defaultValue="camiseta"
+                defaultValue="Camiseta"
+                list="garment-type-options"
                 className="w-full rounded-xl border border-black/15 px-4 py-2.5 bg-white"
-              >
-                <option value="camiseta">Camiseta</option>
-                <option value="buzo">Buzo</option>
-              </select>
+              />
+              <datalist id="garment-type-options">
+                <option value="Camiseta" />
+                <option value="Buzo" />
+                <option value="Tank top" />
+              </datalist>
             </div>
             <div>
               <label htmlFor="technique" className="block text-sm font-medium mb-1">

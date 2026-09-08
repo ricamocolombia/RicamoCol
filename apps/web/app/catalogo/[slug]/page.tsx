@@ -23,7 +23,13 @@ interface VariantRow {
   size: string;
   color: string | null;
   price_cop: number;
-  stock_quantity: number;
+}
+
+interface SiblingProductRow {
+  id: string;
+  name: string;
+  slug: string;
+  garment_type: string;
 }
 
 export default async function ProductoPage({
@@ -47,33 +53,42 @@ export default async function ProductoPage({
 
   const product = productData as unknown as ProductRow;
 
-  const [{ data: variantsData }, { data: galleryData }, { data: designData }] = await Promise.all([
-    supabase
-      .from("product_variants")
-      .select("id, size, color, price_cop, stock_quantity")
-      .eq("product_id", product.id)
-      .order("size", { ascending: true }),
-    product.design_id
-      ? supabase
-          .from("design_images")
-          .select("id, image_url, is_cover")
-          .eq("design_id", product.design_id)
-          .order("is_cover", { ascending: false })
-      : Promise.resolve({ data: [] }),
-    product.design_id
-      ? supabase.from("designs").select("image_url").eq("id", product.design_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
+  const [{ data: variantsData }, { data: galleryData }, { data: designData }, { data: siblingsData }] =
+    await Promise.all([
+      supabase
+        .from("product_variants")
+        .select("id, size, color, price_cop")
+        .eq("product_id", product.id)
+        .order("size", { ascending: true }),
+      product.design_id
+        ? supabase
+            .from("design_images")
+            .select("id, image_url, is_cover")
+            .eq("design_id", product.design_id)
+            .order("is_cover", { ascending: false })
+        : Promise.resolve({ data: [] }),
+      product.design_id
+        ? supabase.from("designs").select("image_url").eq("id", product.design_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      product.design_id
+        ? supabase
+            .from("products")
+            .select("id, name, slug, garment_type")
+            .eq("design_id", product.design_id)
+            .eq("is_published", true)
+            .neq("id", product.id)
+        : Promise.resolve({ data: [] }),
+    ]);
 
   const variants = (variantsData ?? []) as unknown as VariantRow[];
   const gallery = (galleryData ?? []) as unknown as { id: string; image_url: string }[];
   const legacyImageUrl = (designData as { image_url: string | null } | null)?.image_url ?? null;
   const images = gallery.length > 0 ? gallery.map((g) => g.image_url) : legacyImageUrl ? [legacyImageUrl] : [];
   const [mainImageUrl, ...restImages] = images;
+  const siblings = (siblingsData ?? []) as unknown as SiblingProductRow[];
 
   const sizes = [...new Set(variants.map((v) => v.size))];
   const colors = [...new Set(variants.map((v) => v.color).filter((c): c is string => Boolean(c)))];
-  const inStock = variants.some((v) => v.stock_quantity > 0);
 
   const whatsappMessage = [
     `Hola! Me interesa "${product.name}" ($${currencyFormatter.format(product.base_price_cop)}) del catálogo de Ricamo.`,
@@ -188,10 +203,21 @@ export default async function ProductoPage({
             </div>
           )}
 
-          {!inStock && variants.length > 0 && (
-            <p className="text-sm text-ricamo-red font-semibold mb-4">
-              Agotado por ahora — escríbenos y te avisamos cuando vuelva.
-            </p>
+          {siblings.length > 0 && (
+            <div className="mb-6">
+              <p className="text-sm font-semibold mb-2">Este diseño también en</p>
+              <div className="flex flex-wrap gap-2">
+                {siblings.map((sibling) => (
+                  <Link
+                    key={sibling.id}
+                    href={`/catalogo/${sibling.slug}`}
+                    className="px-3 py-1.5 rounded-full border border-black/15 text-sm hover:border-ricamo-black"
+                  >
+                    {GARMENT_LABELS[sibling.garment_type] ?? sibling.garment_type}
+                  </Link>
+                ))}
+              </div>
+            </div>
           )}
 
           <a

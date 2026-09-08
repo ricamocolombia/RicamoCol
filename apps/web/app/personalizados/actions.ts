@@ -4,12 +4,6 @@ import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 import { buildWhatsAppLink } from "../../lib/whatsapp";
 
-const VALID_GARMENT_TYPES = ["camiseta", "buzo"] as const;
-type GarmentType = (typeof VALID_GARMENT_TYPES)[number];
-function isGarmentType(value: string): value is GarmentType {
-  return (VALID_GARMENT_TYPES as readonly string[]).includes(value);
-}
-
 const VALID_TECHNIQUES = ["bordado", "estampado"] as const;
 type Technique = (typeof VALID_TECHNIQUES)[number];
 function isTechnique(value: string): value is Technique {
@@ -42,8 +36,8 @@ export async function crearSolicitud(formData: FormData) {
   if (!phone) {
     fail("Necesitamos tu teléfono para escribirte por WhatsApp");
   }
-  if (!isGarmentType(garmentTypeRaw)) {
-    fail("Elige camiseta o buzo");
+  if (!garmentTypeRaw) {
+    fail("Cuéntanos qué prenda quieres");
   }
   if (!isTechnique(techniqueRaw)) {
     fail("Elige bordado o estampado");
@@ -51,7 +45,7 @@ export async function crearSolicitud(formData: FormData) {
   if (!referenceNotes) {
     fail("Cuéntanos qué idea tienes en mente");
   }
-  const garmentType: GarmentType = garmentTypeRaw;
+  const garmentType = garmentTypeRaw;
   const technique: Technique = techniqueRaw;
 
   const quantity = Number.parseInt(quantityRaw, 10);
@@ -103,7 +97,7 @@ export async function crearSolicitud(formData: FormData) {
 
   const message = [
     `Hola! Soy ${name} y quiero personalizar una prenda con Ricamo.`,
-    `Prenda: ${garmentType === "camiseta" ? "Camiseta" : "Buzo"} (${technique === "bordado" ? "bordado" : "estampado"})${size ? `, talla ${size}` : ""}, cantidad: ${quantity}.`,
+    `Prenda: ${garmentType} (${technique === "bordado" ? "bordado" : "estampado"})${size ? `, talla ${size}` : ""}, cantidad: ${quantity}.`,
     `Lo que tengo en mente: ${referenceNotes}`,
   ].join(" ");
 

@@ -74,11 +74,6 @@ const FORWARD_ACTION: Partial<
   enviado_maquiladora: { status: "archivado", label: "Archivar" },
 };
 
-// Solo un diseño aprobado (o mas adelante en el flujo) puede convertirse en
-// producto vendible -- es la aprobacion explicita del administrador que
-// pidio el negocio, no algo automatico.
-const PUBLISHABLE_STATUSES: DesignStatus[] = ["aprobado", "enviado_maquiladora"];
-
 const dateFormatter = new Intl.DateTimeFormat("es-CO", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -137,8 +132,10 @@ export default async function DisenosPage({
         <div>
           <h1 className="text-2xl font-bold mb-1">Diseños</h1>
           <p className="text-neutral-600">
-            Banco de diseños de Maria Jose (bordado y estampado), con su flujo
-            de aprobación y la publicación al ecommerce.
+            Banco de diseños de Maria Jose (bordado y estampado). El estado
+            es solo para llevar el flujo de producción — cualquier diseño se
+            puede gestionar y publicar al catálogo, esté en el estado que
+            esté.
           </p>
         </div>
         <Link
@@ -183,7 +180,6 @@ export default async function DisenosPage({
                   : undefined;
                 const forward = FORWARD_ACTION[design.status];
                 const product = productByDesignId.get(design.id);
-                const canPublish = PUBLISHABLE_STATUSES.includes(design.status);
                 const thumbnail = coverByDesignId.get(design.id) ?? design.image_url;
 
                 return (
@@ -322,25 +318,12 @@ export default async function DisenosPage({
                           </form>
                         )}
 
-                        {product ? (
-                          <Link
-                            href="/catalogo"
-                            className="w-full text-xs text-center rounded-lg px-2 py-1.5 border border-neutral-300 text-neutral-600 hover:border-ricamo-black hover:text-ricamo-black"
-                          >
-                            Gestionar en Catálogo
-                          </Link>
-                        ) : canPublish ? (
-                          <Link
-                            href={`/disenos/${design.id}/publicar`}
-                            className="w-full text-xs text-center rounded-lg px-2 py-1.5 border border-ricamo-black text-ricamo-black hover:bg-ricamo-black hover:text-white"
-                          >
-                            Crear producto y publicar
-                          </Link>
-                        ) : (
-                          <p className="text-xs text-neutral-400 text-center">
-                            Requiere aprobación para publicarse
-                          </p>
-                        )}
+                        <Link
+                          href={`/disenos/${design.id}/catalogo`}
+                          className="w-full text-xs text-center rounded-lg px-2 py-1.5 border border-ricamo-black text-ricamo-black hover:bg-ricamo-black hover:text-white"
+                        >
+                          Gestionar catálogo
+                        </Link>
 
                         <Link
                           href={`/disenos/${design.id}/editar`}
