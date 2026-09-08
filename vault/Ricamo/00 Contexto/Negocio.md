@@ -20,6 +20,8 @@ Ricamo es una marca de bordados y estampados personalizados en camisetas y buzos
 ## Identidad de marca
 - Logo recibido el 2026-08-27: isotipo de carita feliz dibujada a mano + wordmark "Ricamo", tagline **"Lo creas, lo llevas"**. Dos versiones (fondo negro/logo amarillo y fondo amarillo/logo negro). Colores tomados a ojo: amarillo `#F5C518`, negro `#0A0A0A` (ver `packages/ui/src/tokens.ts` en el repo de código). Rojo sigue siendo un acento no confirmado.
 - Maria Jose Ruiz es la cara de la marca — la web debe darle protagonismo como marca personal (bio, redes, historia).
+- **Instagram personal de Maria Jose, confirmado por el usuario (2026-09-08)**: https://www.instagram.com/majoruizg_/ — distinto del Instagram de la marca (@ricamo_col, abajo). El botón "Síguela en Instagram" de `MariaJoseSpotlight.tsx` usa este link personal; las menciones a "lo que ves en Instagram es lo que recibes" siguen apuntando a @ricamo_col (el catálogo real).
+- **TikTok, confirmado por el usuario (2026-09-08)**: marca https://www.tiktok.com/@ricamocol (agregado al Footer junto a Instagram), Maria Jose personal https://www.tiktok.com/@mariajruizg (botón "Síguela en TikTok" en `MariaJoseSpotlight.tsx`, junto al de Instagram).
 
 ## Instagram (@ricamo_col) — referencia de marca y catálogo real
 Visto el 2026-08-27: https://www.instagram.com/ricamo_col/

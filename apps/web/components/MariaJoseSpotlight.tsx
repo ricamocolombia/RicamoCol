@@ -59,12 +59,20 @@ export function MariaJoseSpotlight({ compact = false }: { compact?: boolean }) {
 
           <div className="flex flex-wrap gap-3">
             <a
-              href="https://www.instagram.com/ricamo_col/"
+              href="https://www.instagram.com/majoruizg_/"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 bg-ricamo-yellow text-ricamo-black text-sm font-semibold rounded-full px-5 py-2.5 hover:bg-white transition-colors"
             >
               Síguela en Instagram
+            </a>
+            <a
+              href="https://www.tiktok.com/@mariajruizg"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 border border-white/25 text-white text-sm font-semibold rounded-full px-5 py-2.5 hover:bg-white hover:text-ricamo-black transition-colors"
+            >
+              Síguela en TikTok
             </a>
             {compact && (
               <Link

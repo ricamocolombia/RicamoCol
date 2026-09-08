@@ -39,27 +39,51 @@ export function Footer() {
           <p className="text-sm font-semibold uppercase tracking-wide text-white/50 mb-3">
             Síguenos
           </p>
-          <a
-            href="https://www.instagram.com/ricamo_col/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-white/80 hover:text-ricamo-yellow"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              aria-hidden="true"
+          <div className="flex flex-col gap-2.5">
+            <a
+              href="https://www.instagram.com/ricamo_col/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-white/80 hover:text-ricamo-yellow"
             >
-              <rect x="2" y="2" width="20" height="20" rx="5" />
-              <circle cx="12" cy="12" r="4" />
-              <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" />
-            </svg>
-            @ricamo_col
-          </a>
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden="true"
+              >
+                <rect x="2" y="2" width="20" height="20" rx="5" />
+                <circle cx="12" cy="12" r="4" />
+                <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" />
+              </svg>
+              @ricamo_col
+            </a>
+            <a
+              href="https://www.tiktok.com/@ricamocol"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-white/80 hover:text-ricamo-yellow"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M14 3.5v11.2a3.7 3.7 0 1 1-2.2-3.4" />
+                <path d="M14 3.5c.4 2.6 2.4 4.3 5 4.5" />
+              </svg>
+              @ricamocol
+            </a>
+          </div>
         </div>
       </div>
 
