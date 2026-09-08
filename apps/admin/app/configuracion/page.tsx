@@ -1,9 +1,11 @@
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 import { currencyFormatter } from "../../lib/metrics";
+import { ImageDropzone } from "../../components/ImageDropzone";
 import {
   actualizarCostoEstampado,
   actualizarEmailAlertas,
   actualizarProveedoresProduccion,
+  actualizarPagoTransferencia,
 } from "./actions";
 
 // Datos en vivo del negocio: nunca prerenderizar de forma estatica.
@@ -44,7 +46,13 @@ export default async function ConfiguracionPage({
     supabase
       .from("app_settings")
       .select("key, value")
-      .in("key", ["stock_alert_email", "supplier_estampado_id", "supplier_bordado_id"]),
+      .in("key", [
+        "stock_alert_email",
+        "supplier_estampado_id",
+        "supplier_bordado_id",
+        "payment_qr_image_url",
+        "payment_bank_account_info",
+      ]),
     supabase.from("suppliers").select("id, name").order("name", { ascending: true }),
   ]);
 
@@ -53,6 +61,8 @@ export default async function ConfiguracionPage({
   const alertEmail = settings.get("stock_alert_email") ?? "";
   const supplierEstampadoId = settings.get("supplier_estampado_id") ?? "";
   const supplierBordadoId = settings.get("supplier_bordado_id") ?? "";
+  const paymentQrImageUrl = settings.get("payment_qr_image_url") ?? "";
+  const paymentBankAccountInfo = settings.get("payment_bank_account_info") ?? "";
   const suppliers = (suppliersData ?? []) as unknown as { id: string; name: string }[];
 
   return (
@@ -168,6 +178,52 @@ export default async function ConfiguracionPage({
             .
           </p>
         )}
+      </div>
+
+      <div className="rounded-xl border border-neutral-200 bg-white p-6 mb-8">
+        <h2 className="text-lg font-semibold mb-1">Pago por transferencia</h2>
+        <p className="text-sm text-neutral-500 mb-4">
+          QR y datos de cuenta que ve el cliente al pagar en el checkout del
+          catálogo (`/catalogo/[producto]/comprar`). Sin esto configurado, el
+          checkout solo le pide que escriba por WhatsApp.
+        </p>
+        <form action={actualizarPagoTransferencia} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">QR de la cuenta</label>
+            <ImageDropzone name="qr_image" label="Arrastra el QR aquí o haz clic para elegir" />
+            {paymentQrImageUrl && (
+              <div className="flex items-center gap-2 mt-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={paymentQrImageUrl}
+                  alt="QR de pago actual"
+                  className="w-16 h-16 rounded-lg object-contain border border-neutral-200 bg-neutral-50"
+                />
+                <span className="text-xs text-neutral-500">QR actual — sube uno nuevo para reemplazarlo</span>
+              </div>
+            )}
+            <input type="hidden" name="current_qr_image_url" value={paymentQrImageUrl} />
+          </div>
+          <div>
+            <label htmlFor="bank_account_info" className="block text-sm font-medium mb-1">
+              Datos de la cuenta
+            </label>
+            <textarea
+              id="bank_account_info"
+              name="bank_account_info"
+              rows={4}
+              defaultValue={paymentBankAccountInfo}
+              placeholder={"Bancolombia — Ahorros\n123-456789-00\nMaria Jose Ruiz"}
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+            />
+          </div>
+          <button
+            type="submit"
+            className="bg-ricamo-yellow text-ricamo-black font-semibold rounded-lg px-4 py-2"
+          >
+            Guardar
+          </button>
+        </form>
       </div>
 
       <h2 className="text-lg font-semibold mb-1">Costos de estampado</h2>

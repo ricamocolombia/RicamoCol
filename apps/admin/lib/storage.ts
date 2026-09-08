@@ -6,9 +6,14 @@ const MAX_SIZE_BYTES = 8 * 1024 * 1024;
 export class ImageUploadError extends Error {}
 
 // Sube una imagen al bucket design-images (publico) y devuelve la URL
-// publica. `folder` separa las imagenes de disenos de las de portada de
-// colecciones dentro del mismo bucket (no hace falta un bucket aparte).
-export async function uploadDesignImage(file: File, folder: "disenos" | "colecciones"): Promise<string> {
+// publica. `folder` separa las imagenes de disenos, portadas de colecciones
+// y el QR de pago dentro del mismo bucket (no hace falta un bucket aparte
+// -- el QR no es sensible, a diferencia del comprobante de pago que sí vive
+// en un bucket privado aparte, ver apps/web/lib/paymentProof.ts).
+export async function uploadDesignImage(
+  file: File,
+  folder: "disenos" | "colecciones" | "pagos"
+): Promise<string> {
   if (!file.type.startsWith("image/")) {
     throw new ImageUploadError("El archivo debe ser una imagen");
   }

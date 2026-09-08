@@ -19,6 +19,7 @@ function isOrderStatus(value: string): value is OrderStatus {
 
 const VALID_PAYMENT_STATUSES = [
   "pendiente",
+  "comprobante_pendiente",
   "anticipo_pagado",
   "pagado",
   "reembolsado",
@@ -74,6 +75,119 @@ export async function updateOrderStatus(formData: FormData) {
   if (statusRaw !== "pendiente") {
     await sendOrderStatusEmail(id, statusRaw);
   }
+
+  redirect(`/ventas/${id}`);
+}
+
+// Aprueba un pedido con comprobante_pendiente: registra el ingreso en
+// Bancos (mismo patron que el bloque de pago de ventas/nueva/actions.ts),
+// marca el pago como pagado y avanza el pedido a confirmado -- nunca se
+// asume el pago, siempre requiere que el admin elija el banco y confirme
+// el monto visto en el comprobante.
+export async function aprobarComprobante(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
+  const bankAccountId = String(formData.get("bank_account_id") ?? "").trim();
+  const amountReceivedRaw = String(formData.get("amount_received_cop") ?? "").trim();
+
+  if (!id) {
+    redirect(`/ventas?error=${encodeURIComponent("Venta inválida")}`);
+  }
+  if (!bankAccountId) {
+    fail(id, "Elige el banco donde entró el pago");
+  }
+  const amountReceived = Number.parseInt(amountReceivedRaw, 10);
+  if (!Number.isFinite(amountReceived) || amountReceived <= 0) {
+    fail(id, "El monto recibido debe ser un número mayor a 0");
+  }
+
+  const supabase = createServiceRoleClient();
+
+  const { data: order, error: orderFetchError } = await supabase
+    .from("orders")
+    .select("id, customer_id, total_cop, payment_status, status")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (orderFetchError || !order) {
+    fail(id, "No se encontró el pedido");
+  }
+  if (order.payment_status !== "comprobante_pendiente") {
+    fail(id, "Este pedido ya no tiene un comprobante pendiente de validar");
+  }
+
+  const { error: transactionError } = await supabase.from("transactions").insert({
+    bank_account_id: bankAccountId,
+    type: "ingreso",
+    category: "Venta",
+    amount_cop: amountReceived,
+    description: "Venta — pago por transferencia (web)",
+    reference_order_id: id,
+  });
+
+  if (transactionError) {
+    fail(id, "No se pudo registrar el pago en Bancos: " + transactionError.message);
+  }
+
+  const pending = order.total_cop - amountReceived;
+  if (pending > 0 && order.customer_id) {
+    const { error: receivableError } = await supabase.from("accounts_receivable").insert({
+      customer_id: order.customer_id,
+      order_id: id,
+      amount_cop: pending,
+      notes: "Saldo pendiente de pedido web pagado por transferencia",
+    });
+    if (receivableError) {
+      fail(
+        id,
+        "El pago se registró pero no se pudo crear la cuenta por cobrar del saldo pendiente: " +
+          receivableError.message
+      );
+    }
+  }
+
+  const nextStatus = order.status === "pendiente" ? "confirmado" : order.status;
+
+  const { error: updateError } = await supabase
+    .from("orders")
+    .update({ payment_status: "pagado", status: nextStatus })
+    .eq("id", id);
+
+  if (updateError) {
+    fail(id, "El pago se registró pero no se pudo actualizar el pedido: " + updateError.message);
+  }
+
+  if (nextStatus !== order.status) {
+    await sendOrderStatusEmail(id, "confirmado");
+  }
+
+  redirect(`/ventas/${id}`);
+}
+
+export async function rechazarComprobante(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
+  const rejectionReason = String(formData.get("rejection_reason") ?? "").trim();
+
+  if (!id) {
+    redirect(`/ventas?error=${encodeURIComponent("Venta inválida")}`);
+  }
+
+  const supabase = createServiceRoleClient();
+
+  const { data: order } = await supabase.from("orders").select("notes").eq("id", id).maybeSingle();
+
+  const noteLine = `Comprobante rechazado${rejectionReason ? `: ${rejectionReason}` : ""}`;
+  const notes = [order?.notes, noteLine].filter(Boolean).join("\n");
+
+  const { error } = await supabase
+    .from("orders")
+    .update({ payment_status: "pendiente", notes })
+    .eq("id", id);
+
+  if (error) {
+    fail(id, "No se pudo rechazar el comprobante: " + error.message);
+  }
+
+  await sendOrderStatusEmail(id, "comprobante_rechazado");
 
   redirect(`/ventas/${id}`);
 }

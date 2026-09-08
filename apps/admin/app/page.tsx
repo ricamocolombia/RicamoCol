@@ -251,6 +251,7 @@ export default async function DashboardPage({
     .map(([status, count]) => ({ label: ORDER_STATUS_LABELS[status] ?? status, value: count }));
 
   const pedidosPendientesConfirmar = allOrders.filter((o) => o.status === "pendiente").length;
+  const comprobantesPendientes = allOrders.filter((o) => o.payment_status === "comprobante_pendiente").length;
 
   const stockAlertItems = inventoryItems.filter((i) => i.quantity_on_hand <= i.reorder_level);
   const stockEnAlerta = stockAlertItems.length;
@@ -312,6 +313,12 @@ export default async function DashboardPage({
   const salesTrend = buildSalesTrend(orders, trendStart, trendEnd);
 
   const attentionItems = [
+    comprobantesPendientes > 0 && {
+      href: "/ventas",
+      label: "Comprobantes por validar",
+      value: String(comprobantesPendientes),
+      detail: "pago por transferencia esperando aprobación",
+    },
     pedidosPendientesConfirmar > 0 && {
       href: "/ventas",
       label: "Pedidos por confirmar",

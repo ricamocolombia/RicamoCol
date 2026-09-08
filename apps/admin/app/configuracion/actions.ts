@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
+import { uploadDesignImage } from "../../lib/storage";
 
 const VALID_PRINT_SIZES = [
   "punto_corazon",
@@ -55,6 +56,38 @@ export async function actualizarEmailAlertas(formData: FormData) {
   if (error) {
     redirect(
       `/configuracion?error=${encodeURIComponent("No se pudo guardar el correo de alertas: " + error.message)}`
+    );
+  }
+
+  redirect("/configuracion");
+}
+
+export async function actualizarPagoTransferencia(formData: FormData) {
+  const currentQrImageUrl = String(formData.get("current_qr_image_url") ?? "").trim();
+  const bankAccountInfo = String(formData.get("bank_account_info") ?? "").trim();
+  const qrFile = formData.get("qr_image");
+
+  let qrImageUrl = currentQrImageUrl || null;
+
+  if (qrFile instanceof File && qrFile.size > 0) {
+    try {
+      qrImageUrl = await uploadDesignImage(qrFile, "pagos");
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : "error desconocido";
+      redirect(`/configuracion?error=${encodeURIComponent(message)}`);
+    }
+  }
+
+  const supabase = createServiceRoleClient();
+
+  const { error } = await supabase.from("app_settings").upsert([
+    { key: "payment_qr_image_url", value: qrImageUrl },
+    { key: "payment_bank_account_info", value: bankAccountInfo || null },
+  ]);
+
+  if (error) {
+    redirect(
+      `/configuracion?error=${encodeURIComponent("No se pudo guardar la configuración de pago: " + error.message)}`
     );
   }
 

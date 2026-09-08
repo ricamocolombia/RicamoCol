@@ -13,7 +13,7 @@ interface OrderRow {
     | "entregado"
     | "cancelado";
   total_cop: number;
-  payment_status: "pendiente" | "anticipo_pagado" | "pagado" | "reembolsado";
+  payment_status: "pendiente" | "comprobante_pendiente" | "anticipo_pagado" | "pagado" | "reembolsado";
   payment_method: string | null;
   courier_id: string | null;
   created_at: string;
@@ -65,6 +65,7 @@ const STATUS_STYLES: Record<OrderRow["status"], string> = {
 
 const PAYMENT_LABELS: Record<OrderRow["payment_status"], string> = {
   pendiente: "Pendiente",
+  comprobante_pendiente: "Comprobante por validar",
   anticipo_pagado: "Anticipo pagado",
   pagado: "Pagado",
   reembolsado: "Reembolsado",
@@ -72,6 +73,7 @@ const PAYMENT_LABELS: Record<OrderRow["payment_status"], string> = {
 
 const PAYMENT_STYLES: Record<OrderRow["payment_status"], string> = {
   pendiente: "bg-neutral-100 text-neutral-600",
+  comprobante_pendiente: "bg-yellow-100 text-yellow-800",
   anticipo_pagado: "bg-yellow-100 text-yellow-800",
   pagado: "bg-green-100 text-green-700",
   reembolsado: "bg-red-100 text-red-700",

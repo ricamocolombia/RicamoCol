@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 interface OrderRow {
   id: string;
-  payment_status: "pendiente" | "anticipo_pagado" | "pagado" | "reembolsado";
+  payment_status: "pendiente" | "comprobante_pendiente" | "anticipo_pagado" | "pagado" | "reembolsado";
   payment_method: string | null;
   courier_id: string | null;
   shipping_type: "nacional" | "local" | null;
@@ -72,10 +72,21 @@ export default async function EditarVentaPage({
             className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
           >
             <option value="pendiente">Pendiente</option>
+            <option value="comprobante_pendiente">Comprobante por validar</option>
             <option value="anticipo_pagado">Anticipo pagado</option>
             <option value="pagado">Pagado</option>
             <option value="reembolsado">Reembolsado</option>
           </select>
+          {order.payment_status === "comprobante_pendiente" && (
+            <p className="text-xs text-neutral-500 mt-1">
+              Este pedido tiene un comprobante esperando validación — apruébalo
+              o recházalo desde{" "}
+              <Link href={`/ventas/${id}`} className="underline">
+                el detalle de la venta
+              </Link>{" "}
+              en vez de cambiar el estado aquí directamente.
+            </p>
+          )}
         </div>
 
         <div>

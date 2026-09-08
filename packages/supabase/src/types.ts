@@ -561,6 +561,7 @@ export interface Database {
           total_cop: number;
           payment_status:
             | "pendiente"
+            | "comprobante_pendiente"
             | "anticipo_pagado"
             | "pagado"
             | "reembolsado";
@@ -568,6 +569,8 @@ export interface Database {
           courier_id: Uuid | null;
           shipping_type: "nacional" | "local" | null;
           shipping_payment_status: "contraentrega" | "pagado" | null;
+          payment_proof_path: string | null;
+          payment_proof_uploaded_at: Timestamp | null;
           notes: string | null;
           created_at: Timestamp;
           updated_at: Timestamp;
@@ -587,6 +590,7 @@ export interface Database {
           total_cop?: number;
           payment_status?:
             | "pendiente"
+            | "comprobante_pendiente"
             | "anticipo_pagado"
             | "pagado"
             | "reembolsado";
@@ -594,6 +598,8 @@ export interface Database {
           courier_id?: Uuid | null;
           shipping_type?: "nacional" | "local" | null;
           shipping_payment_status?: "contraentrega" | "pagado" | null;
+          payment_proof_path?: string | null;
+          payment_proof_uploaded_at?: Timestamp | null;
           notes?: string | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;

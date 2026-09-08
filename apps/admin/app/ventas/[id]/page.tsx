@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
-import { updateOrderStatus } from "./actions";
+import { updateOrderStatus, aprobarComprobante, rechazarComprobante } from "./actions";
 
 // Datos en vivo del negocio: nunca prerenderizar de forma estatica.
 export const dynamic = "force-dynamic";
@@ -20,14 +20,21 @@ interface OrderRow {
   source: "web_catalogo" | "web_personalizado" | "whatsapp" | "manual";
   status: OrderStatus;
   total_cop: number;
-  payment_status: "pendiente" | "anticipo_pagado" | "pagado" | "reembolsado";
+  payment_status: "pendiente" | "comprobante_pendiente" | "anticipo_pagado" | "pagado" | "reembolsado";
   payment_method: string | null;
   courier_id: string | null;
   shipping_type: "nacional" | "local" | null;
   shipping_payment_status: "contraentrega" | "pagado" | null;
+  payment_proof_path: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface BankAccountRow {
+  id: string;
+  name: string;
+  bank_name: string | null;
 }
 
 interface CustomerRow {
@@ -95,6 +102,7 @@ const SOURCE_LABELS: Record<OrderRow["source"], string> = {
 
 const PAYMENT_LABELS: Record<OrderRow["payment_status"], string> = {
   pendiente: "Pendiente",
+  comprobante_pendiente: "Comprobante por validar",
   anticipo_pagado: "Anticipo pagado",
   pagado: "Pagado",
   reembolsado: "Reembolsado",
@@ -125,7 +133,7 @@ export default async function DetalleVentaPage({
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
     .select(
-      "id, customer_id, source, status, total_cop, payment_status, payment_method, courier_id, shipping_type, shipping_payment_status, notes, created_at, updated_at"
+      "id, customer_id, source, status, total_cop, payment_status, payment_method, courier_id, shipping_type, shipping_payment_status, payment_proof_path, notes, created_at, updated_at"
     )
     .eq("id", id)
     .maybeSingle();
@@ -136,22 +144,35 @@ export default async function DetalleVentaPage({
 
   const order = orderData as unknown as OrderRow;
 
-  const [{ data: customerData }, { data: courierData }, { data: itemsData }] = await Promise.all([
-    order.customer_id
-      ? supabase.from("customers").select("id, full_name, phone, city").eq("id", order.customer_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    order.courier_id
-      ? supabase.from("couriers").select("id, name").eq("id", order.courier_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase
-      .from("order_items")
-      .select("id, description, quantity, unit_price_cop, garment_type, design_category, color, size, technique, cost_cop")
-      .eq("order_id", id),
-  ]);
+  const [{ data: customerData }, { data: courierData }, { data: itemsData }, { data: bankAccountsData }] =
+    await Promise.all([
+      order.customer_id
+        ? supabase.from("customers").select("id, full_name, phone, city").eq("id", order.customer_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      order.courier_id
+        ? supabase.from("couriers").select("id, name").eq("id", order.courier_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from("order_items")
+        .select("id, description, quantity, unit_price_cop, garment_type, design_category, color, size, technique, cost_cop")
+        .eq("order_id", id),
+      order.payment_status === "comprobante_pendiente"
+        ? supabase.from("bank_accounts").select("id, name, bank_name").eq("is_active", true).order("name", { ascending: true })
+        : Promise.resolve({ data: [] }),
+    ]);
 
   const customer = customerData as unknown as CustomerRow | null;
   const courier = courierData as unknown as CourierRow | null;
   const items = (itemsData ?? []) as unknown as ItemRow[];
+  const bankAccounts = (bankAccountsData ?? []) as unknown as BankAccountRow[];
+
+  let paymentProofSignedUrl: string | null = null;
+  if (order.payment_proof_path) {
+    const { data: signedUrlData } = await supabase.storage
+      .from("payment-proofs")
+      .createSignedUrl(order.payment_proof_path, 60 * 15);
+    paymentProofSignedUrl = signedUrlData?.signedUrl ?? null;
+  }
 
   const itemIds = items.map((item) => item.id);
   const { data: decorationsData } =
@@ -280,6 +301,91 @@ export default async function DetalleVentaPage({
           </p>
         )}
       </div>
+
+      {order.payment_status === "comprobante_pendiente" && (
+        <div className="rounded-xl border border-ricamo-yellow/40 bg-ricamo-yellow/5 p-6 mb-6">
+          <h2 className="font-semibold mb-3">Comprobante de pago</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              {paymentProofSignedUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={paymentProofSignedUrl}
+                  alt="Comprobante de pago"
+                  className="w-full max-w-xs rounded-lg border border-neutral-200"
+                />
+              ) : (
+                <p className="text-sm text-neutral-500">No se pudo cargar la imagen del comprobante.</p>
+              )}
+            </div>
+            <div className="space-y-4">
+              <form action={aprobarComprobante} className="space-y-3">
+                <input type="hidden" name="id" value={id} />
+                <div>
+                  <label htmlFor="bank_account_id" className="block text-xs font-medium mb-1">
+                    Banco donde entró el pago
+                  </label>
+                  <select
+                    id="bank_account_id"
+                    name="bank_account_id"
+                    required
+                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">— Elige un banco —</option>
+                    {bankAccounts.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                        {b.bank_name ? ` · ${b.bank_name}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="amount_received_cop" className="block text-xs font-medium mb-1">
+                    Monto recibido
+                  </label>
+                  <input
+                    id="amount_received_cop"
+                    name="amount_received_cop"
+                    type="number"
+                    min={0}
+                    step={1}
+                    defaultValue={order.total_cop}
+                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full text-sm font-semibold rounded-lg px-4 py-2 bg-ricamo-yellow text-ricamo-black"
+                >
+                  Aprobar pago
+                </button>
+              </form>
+              <form action={rechazarComprobante} className="space-y-3 pt-3 border-t border-ricamo-yellow/30">
+                <input type="hidden" name="id" value={id} />
+                <div>
+                  <label htmlFor="rejection_reason" className="block text-xs font-medium mb-1">
+                    Motivo del rechazo
+                  </label>
+                  <input
+                    id="rejection_reason"
+                    name="rejection_reason"
+                    type="text"
+                    placeholder="Ej: el monto no coincide"
+                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full text-sm rounded-lg px-4 py-2 border border-ricamo-red/40 text-ricamo-red hover:bg-ricamo-red/5"
+                >
+                  Rechazar comprobante
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="rounded-xl border border-neutral-200 bg-white p-6">

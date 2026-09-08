@@ -171,19 +171,23 @@ export default async function ProductoPage({
             <p className="text-ricamo-black/70 leading-relaxed mb-6">{product.description}</p>
           )}
 
-          {sizes.length > 0 && (
+          {variants.length > 0 && (
             <div className="mb-4">
-              <p className="text-sm font-semibold mb-2">Tallas disponibles</p>
+              <p className="text-sm font-semibold mb-2">Elige tu talla para comprar</p>
               <div className="flex flex-wrap gap-2">
-                {sizes.map((size) => (
-                  <span
-                    key={size}
-                    className="w-11 h-11 flex items-center justify-center rounded-full border border-black/15 text-sm font-semibold"
+                {variants.map((variant) => (
+                  <Link
+                    key={variant.id}
+                    href={`/catalogo/${product.slug}/comprar?variante=${variant.id}`}
+                    className="min-w-11 h-11 px-3 flex items-center justify-center rounded-full border border-black/15 text-sm font-semibold hover:border-ricamo-red hover:text-ricamo-red transition-colors"
                   >
-                    {size}
-                  </span>
+                    {variant.size}
+                  </Link>
                 ))}
               </div>
+              <p className="text-xs text-ricamo-black/50 mt-2">
+                Pago por transferencia — subes el comprobante y Maria Jose lo confirma en máximo 4 horas hábiles.
+              </p>
             </div>
           )}
 
@@ -224,14 +228,14 @@ export default async function ProductoPage({
             href={buildWhatsAppLink(whatsappMessage)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center w-full sm:w-auto bg-ricamo-red text-white font-semibold rounded-full px-8 py-4 hover:bg-ricamo-black transition-colors"
+            className="inline-flex items-center justify-center w-full sm:w-auto border border-black/15 text-ricamo-black font-semibold rounded-full px-8 py-4 hover:border-ricamo-black transition-colors"
           >
-            Pedir por WhatsApp
+            Prefiero preguntar por WhatsApp
           </a>
 
           <p className="text-xs text-ricamo-black/50 mt-3">
-            Cerramos el pedido contigo por WhatsApp — talla, color y envío se
-            confirman ahí.
+            ¿Dudas antes de comprar, o quieres ajustar algo? Escríbenos y
+            cerramos el pedido contigo por WhatsApp.
           </p>
 
           <div className="mt-8 pt-6 border-t border-black/10">

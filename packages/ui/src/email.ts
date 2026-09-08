@@ -91,6 +91,8 @@ export interface OrderEmailItem {
 
 export type OrderEmailKind =
   | "creado"
+  | "comprobante_recibido"
+  | "comprobante_rechazado"
   | "confirmado"
   | "en_produccion"
   | "enviado"
@@ -116,6 +118,22 @@ const ORDER_COPY: Record<
     heading: "¡Gracias por tu compra!",
     message: () =>
       "Ya registramos tu pedido en Ricamo. Te iremos avisando por aquí a medida que avance — confirmación, producción y envío.",
+  },
+  comprobante_recibido: {
+    subject: "Recibimos tu comprobante de pago",
+    badge: "En revisión",
+    badgeColor: brand.colors.yellow,
+    heading: "Estamos validando tu pago",
+    message: () =>
+      "Recibimos tu comprobante de pago. Maria Jose lo revisa y te confirma en un plazo máximo de 4 horas hábiles — apenas se apruebe, empezamos a producir tu pedido.",
+  },
+  comprobante_rechazado: {
+    subject: "No pudimos validar tu comprobante",
+    badge: "Requiere atención",
+    badgeColor: brand.colors.red,
+    heading: "Tu comprobante necesita revisión",
+    message: () =>
+      "No pudimos validar el comprobante que enviaste. Escríbenos por WhatsApp para resolverlo y confirmar tu pedido.",
   },
   confirmado: {
     subject: "Tu pedido fue confirmado",
