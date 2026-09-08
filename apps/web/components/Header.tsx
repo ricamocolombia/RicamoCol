@@ -11,14 +11,14 @@ const NAV_LINKS = [
 export function Header() {
   return (
     <header className="sticky top-0 z-50 bg-ricamo-cream/95 backdrop-blur border-b border-black/10">
-      <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-6 py-2.5 flex items-center justify-between gap-4">
         <Link href="/" className="inline-block shrink-0">
           <Image
-            src="/brand/logo-transparente-negro.png"
+            src="/brand/logo-angosto-negro.png"
             alt="Ricamo — lo creas, lo llevas"
-            width={220}
-            height={220}
-            className="h-14 w-auto"
+            width={300}
+            height={165}
+            className="h-16 w-auto"
             priority
           />
         </Link>
