@@ -11,15 +11,20 @@ export function ImageDropzone({
   name,
   multiple = false,
   label = "Arrastra imágenes aquí o haz clic para elegir",
+  maxFiles,
 }: {
   name: string;
   multiple?: boolean;
   label?: string;
+  // Tope de archivos por envio: si se eligen mas, se toman los primeros y
+  // se avisa (el servidor vuelve a validar el total del diseño).
+  maxFiles?: number;
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
 
   function updatePreviews(files: FileList | null) {
     if (!files || files.length === 0) {
@@ -35,7 +40,16 @@ export function ImageDropzone({
   // Las fotos pesadas se reducen antes de enviarse: el <form> tiene un tope
   // de 4MB por envio (next.config.mjs).
   async function handleFiles(input: HTMLInputElement, files: FileList) {
-    updatePreviews(await shrinkInputFiles(input, files));
+    let selected = files;
+    if (maxFiles !== undefined && files.length > maxFiles) {
+      const transfer = new DataTransfer();
+      [...files].slice(0, maxFiles).forEach((f) => transfer.items.add(f));
+      selected = transfer.files;
+      setNotice(`Máximo ${maxFiles} — se tomaron las primeras ${maxFiles}.`);
+    } else {
+      setNotice(null);
+    }
+    updatePreviews(await shrinkInputFiles(input, selected));
   }
 
   return (
@@ -92,6 +106,8 @@ export function ImageDropzone({
           className="sr-only"
         />
       </label>
+
+      {notice && <p className="text-xs text-ricamo-red mt-2">{notice}</p>}
 
       {previews.length > 0 && (
         <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mt-3">

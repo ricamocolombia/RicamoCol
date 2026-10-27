@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from "@ricamo/supabase/server";
+import { VIDEO_PATH_RE } from "./designMedia";
 
 const BUCKET = "design-images";
 const MAX_SIZE_BYTES = 4 * 1024 * 1024;
@@ -36,4 +37,21 @@ export async function uploadDesignImage(
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return data.publicUrl;
+}
+
+// URL publica de un video ya subido (ver app/disenos/videoActions.ts), o
+// null si el path no tiene la forma esperada.
+export function publicVideoUrl(path: string): string | null {
+  if (!VIDEO_PATH_RE.test(path)) return null;
+  const supabase = createServiceRoleClient();
+  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+// Borra del bucket un archivo a partir de su URL publica (fotos o video
+// reemplazados/eliminados), para no dejar archivos huerfanos.
+export async function removePublicFile(publicUrl: string | null | undefined): Promise<void> {
+  const path = publicUrl?.split(`/${BUCKET}/`)[1];
+  if (!path) return;
+  const supabase = createServiceRoleClient();
+  await supabase.storage.from(BUCKET).remove([decodeURIComponent(path)]);
 }

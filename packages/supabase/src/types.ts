@@ -127,6 +127,7 @@ export interface Database {
             | "archivado";
           customer_id: Uuid | null;
           image_url: string | null;
+          video_url: string | null;
           notes: string | null;
           published_to_ecommerce: boolean;
           published_at: Timestamp | null;
@@ -145,6 +146,7 @@ export interface Database {
             | "archivado";
           customer_id?: Uuid | null;
           image_url?: string | null;
+          video_url?: string | null;
           notes?: string | null;
           published_to_ecommerce?: boolean;
           published_at?: Timestamp | null;

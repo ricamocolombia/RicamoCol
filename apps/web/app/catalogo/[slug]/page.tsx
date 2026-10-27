@@ -30,6 +30,7 @@ interface SiblingProductRow {
   name: string;
   slug: string;
   garment_type: string;
+  base_price_cop: number;
 }
 
 const SIZE_ORDER = ["2", "4", "6", "8", "10", "12", "14", "16", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
@@ -78,10 +79,10 @@ export default async function ProductoPage({
       product.design_id
         ? supabase
             .from("products")
-            .select("id, name, slug, garment_type")
+            .select("id, name, slug, garment_type, base_price_cop")
             .eq("design_id", product.design_id)
             .eq("is_published", true)
-            .neq("id", product.id)
+            .order("base_price_cop", { ascending: true })
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -90,7 +91,17 @@ export default async function ProductoPage({
   const legacyImageUrl = (designData as { image_url: string | null } | null)?.image_url ?? null;
   const images = gallery.length > 0 ? gallery.map((g) => g.image_url) : legacyImageUrl ? [legacyImageUrl] : [];
   const [mainImageUrl, ...restImages] = images;
-  const siblings = (siblingsData ?? []) as unknown as SiblingProductRow[];
+
+  // Video del diseño (opcional, hasta 1). Consulta aparte y tolerante a
+  // error: si falla, la pagina sigue mostrando las fotos normalmente.
+  const { data: videoData } = product.design_id
+    ? await supabase.from("designs").select("video_url").eq("id", product.design_id).maybeSingle()
+    : { data: null };
+  const videoUrl = (videoData as { video_url: string | null } | null)?.video_url ?? null;
+  // Todas las prendas publicadas del mismo diseño (incluida esta): en los
+  // listados el diseño sale una sola vez y la prenda se elige aqui. Cada
+  // prenda es su propio producto/URL, asi el checkout no cambia.
+  const garmentOptions = (siblingsData ?? []) as unknown as SiblingProductRow[];
 
   // Orden de tallas natural (ninos 4..16, luego S..XXL), no alfabetico.
   variants.sort((a, b) => sizeRank(a.size) - sizeRank(b.size) || a.size.localeCompare(b.size, "es"));
@@ -101,7 +112,7 @@ export default async function ProductoPage({
   const colors = [...new Set(variants.map((v) => v.color).filter((c): c is string => Boolean(c)))];
 
   const whatsappMessage = [
-    `Hola! Me interesa "${product.name}" (${pricesVary ? "desde " : ""}${currencyFormatter.format(minPrice)}) del catálogo de Ricamo.`,
+    `Hola! Me interesa "${product.name}" en ${GARMENT_LABELS[product.garment_type] ?? product.garment_type} (${pricesVary ? "desde " : ""}${currencyFormatter.format(minPrice)}) del catálogo de Ricamo.`,
     sizes.length > 0 ? `Tallas disponibles: ${sizes.join(", ")}.` : null,
     "¿Me ayudas con el pedido?",
   ]
@@ -145,6 +156,18 @@ export default async function ProductoPage({
             )}
           </div>
 
+          {videoUrl && (
+            <video
+              src={videoUrl}
+              controls
+              playsInline
+              muted
+              loop
+              preload="metadata"
+              className="w-full mt-3 rounded-2xl bg-ricamo-bone"
+            />
+          )}
+
           {restImages.length > 0 && (
             <div className="grid grid-cols-3 gap-3 mt-3">
               {restImages.map((url, i) => (
@@ -182,9 +205,42 @@ export default async function ProductoPage({
             <p className="text-ricamo-black/70 leading-relaxed mb-6">{product.description}</p>
           )}
 
+          {garmentOptions.length > 1 && (
+            <div className="mb-5">
+              <p className="text-sm font-semibold mb-2">1. Elige tu prenda</p>
+              <div className="flex flex-wrap gap-2">
+                {garmentOptions.map((option) => {
+                  const isCurrent = option.id === product.id;
+                  return (
+                    <Link
+                      key={option.id}
+                      href={`/catalogo/${option.slug}`}
+                      scroll={false}
+                      aria-current={isCurrent ? "page" : undefined}
+                      className={`px-4 py-2 rounded-2xl border text-sm transition-colors ${
+                        isCurrent
+                          ? "border-ricamo-black bg-ricamo-black text-white"
+                          : "border-black/15 hover:border-ricamo-black"
+                      }`}
+                    >
+                      <span className="font-semibold">
+                        {GARMENT_LABELS[option.garment_type] ?? option.garment_type}
+                      </span>
+                      <span className={`block text-xs ${isCurrent ? "text-white/70" : "text-ricamo-black/60"}`}>
+                        {currencyFormatter.format(option.base_price_cop)}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {variants.length > 0 && (
             <div className="mb-4">
-              <p className="text-sm font-semibold mb-2">Elige tu talla para comprar</p>
+              <p className="text-sm font-semibold mb-2">
+                {garmentOptions.length > 1 ? "2. Elige tu talla para comprar" : "Elige tu talla para comprar"}
+              </p>
               <div className="flex flex-wrap gap-2">
                 {variants.map((variant) => (
                   <Link
@@ -218,23 +274,6 @@ export default async function ProductoPage({
                   >
                     {color}
                   </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {siblings.length > 0 && (
-            <div className="mb-6">
-              <p className="text-sm font-semibold mb-2">Este diseño también en</p>
-              <div className="flex flex-wrap gap-2">
-                {siblings.map((sibling) => (
-                  <Link
-                    key={sibling.id}
-                    href={`/catalogo/${sibling.slug}`}
-                    className="px-3 py-1.5 rounded-full border border-black/15 text-sm hover:border-ricamo-black"
-                  >
-                    {GARMENT_LABELS[sibling.garment_type] ?? sibling.garment_type}
-                  </Link>
                 ))}
               </div>
             </div>

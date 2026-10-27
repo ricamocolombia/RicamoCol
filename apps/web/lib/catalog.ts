@@ -65,27 +65,56 @@ export async function attachCatalogData(
 
   const newCutoff = Date.now() - NEW_WITHIN_DAYS * 24 * 60 * 60 * 1000;
 
-  return products.map((p) => {
+  // Un mismo diseño se publica como un producto por prenda (Camiseta
+  // Regular, Buzo Capucha...), pero en los listados debe salir UNA sola
+  // vez: la prenda se elige dentro del detalle (/catalogo/[slug]). Se
+  // agrupa por diseño respetando el orden de llegada; la tarjeta enlaza a
+  // la prenda mas barata del grupo y muestra "Desde" ese precio. Los
+  // productos sin diseño quedan sueltos.
+  const groups: CatalogProductInput[][] = [];
+  const groupByDesignId = new Map<string, CatalogProductInput[]>();
+  for (const p of products) {
+    if (!p.design_id) {
+      groups.push([p]);
+      continue;
+    }
+    const existing = groupByDesignId.get(p.design_id);
+    if (existing) {
+      existing.push(p);
+    } else {
+      const group = [p];
+      groupByDesignId.set(p.design_id, group);
+      groups.push(group);
+    }
+  }
+
+  return groups.map((group) => {
+    const p = group.reduce((min, cur) => (cur.base_price_cop < min.base_price_cop ? cur : min));
+    const garmentCount = new Set(group.map((g) => g.garment_type)).size;
+    const pricesVary = group.some((g) => g.base_price_cop !== p.base_price_cop);
     const imageUrl = p.design_id
       ? (coverByDesignId.get(p.design_id) ?? legacyImageByDesignId.get(p.design_id) ?? null)
       : null;
 
     let badge: ProductCardData["badge"];
-    if (p.is_bestseller) {
+    if (group.some((g) => g.is_bestseller)) {
       badge = "mas_vendido";
-    } else if (p.created_at && new Date(p.created_at).getTime() >= newCutoff) {
+    } else if (group.some((g) => g.created_at && new Date(g.created_at).getTime() >= newCutoff)) {
       badge = "nuevo";
     }
+    const collectionId = group.find((g) => g.collection_id)?.collection_id;
 
     return {
       slug: p.slug,
       name: p.name,
       imageUrl,
       priceCop: p.base_price_cop,
+      priceFrom: pricesVary,
       garmentType: p.garment_type,
+      garmentCount,
       technique: p.technique,
       badge,
-      collectionName: p.collection_id ? collectionNameById.get(p.collection_id) : null,
+      collectionName: collectionId ? collectionNameById.get(collectionId) : null,
     };
   });
 }
@@ -130,16 +159,17 @@ export async function getGiftSegmentsWithProducts(
     .in("id", productIds);
 
   const products = (productsData ?? []) as unknown as CatalogProductInput[];
-  const enriched = await attachCatalogData(supabase, products);
-  const cardByProductId = new Map(products.map((p, i) => [p.id, enriched[i]]));
+  const productById = new Map(products.map((p) => [p.id, p]));
 
-  return segments.map((segment) => {
-    const segmentProductIds = links
-      .filter((l) => l.gift_segment_id === segment.id)
-      .map((l) => l.product_id);
-    const cards = segmentProductIds
-      .map((id) => cardByProductId.get(id))
-      .filter((c): c is ProductCardData => Boolean(c));
-    return { ...segment, products: cards };
-  });
+  // Una tarjeta por diseño dentro de cada segmento (ver attachCatalogData).
+  return Promise.all(
+    segments.map(async (segment) => {
+      const segmentProducts = links
+        .filter((l) => l.gift_segment_id === segment.id)
+        .map((l) => productById.get(l.product_id))
+        .filter((p): p is CatalogProductInput => Boolean(p));
+      const cards = segmentProducts.length > 0 ? await attachCatalogData(supabase, segmentProducts) : [];
+      return { ...segment, products: cards };
+    })
+  );
 }

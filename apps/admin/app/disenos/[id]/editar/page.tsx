@@ -7,8 +7,12 @@ import {
   agregarImagenesDiseno,
   eliminarImagenDiseno,
   marcarPortadaDiseno,
+  guardarVideoDiseno,
+  quitarVideoDiseno,
 } from "./actions";
 import { ImageDropzone } from "../../../../components/ImageDropzone";
+import { VideoUploader } from "../../../../components/VideoUploader";
+import { MAX_DESIGN_IMAGES } from "../../../../lib/designMedia";
 
 type DesignTechnique = "bordado" | "estampado";
 
@@ -17,6 +21,7 @@ interface DesignRow {
   name: string;
   technique: DesignTechnique;
   image_url: string | null;
+  video_url: string | null;
 }
 
 
@@ -67,6 +72,15 @@ export default async function EditarDisenoPage({
   if (!design) {
     notFound();
   }
+
+  // Aparte y tolerante a error: si la columna video_url (0016) no existe
+  // todavia, la pagina de edicion sigue funcionando sin la seccion de video.
+  const { data: videoData, error: videoError } = await supabase
+    .from("designs")
+    .select("video_url")
+    .eq("id", id)
+    .maybeSingle();
+  design.video_url = videoError ? null : (videoData?.video_url ?? null);
 
   return (
     <main className="px-6 py-10 max-w-2xl">
@@ -163,7 +177,9 @@ export default async function EditarDisenoPage({
       </form>
 
       <section className="rounded-xl border border-neutral-200 bg-white p-6 mt-6">
-        <h2 className="text-sm font-semibold mb-4">Galería de imágenes</h2>
+        <h2 className="text-sm font-semibold mb-4">
+          Fotos ({images.length} de {MAX_DESIGN_IMAGES})
+        </h2>
 
         {images.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
@@ -206,14 +222,58 @@ export default async function EditarDisenoPage({
           </div>
         )}
 
-        <form action={agregarImagenesDiseno}>
+        {images.length < MAX_DESIGN_IMAGES ? (
+          <form action={agregarImagenesDiseno}>
+            <input type="hidden" name="id" value={design.id} />
+            <ImageDropzone
+              name="images"
+              multiple
+              maxFiles={MAX_DESIGN_IMAGES - images.length}
+              label="Agregar más fotos"
+            />
+            <button
+              type="submit"
+              className="mt-3 bg-ricamo-black text-white text-sm font-semibold rounded-lg px-4 py-2"
+            >
+              Subir fotos
+            </button>
+          </form>
+        ) : (
+          <p className="text-xs text-neutral-500">
+            Ya tiene el máximo de {MAX_DESIGN_IMAGES} fotos — elimina alguna para subir otra.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-neutral-200 bg-white p-6 mt-6">
+        <h2 className="text-sm font-semibold mb-4">Video</h2>
+        {design.video_url && (
+          <div className="mb-4">
+            <video
+              src={design.video_url}
+              controls
+              playsInline
+              className="w-full max-w-[320px] rounded-lg border border-neutral-200"
+            />
+            <form action={quitarVideoDiseno} className="mt-2">
+              <input type="hidden" name="id" value={design.id} />
+              <button
+                type="submit"
+                className="text-xs text-neutral-400 hover:text-ricamo-red underline underline-offset-2"
+              >
+                Quitar video
+              </button>
+            </form>
+          </div>
+        )}
+        <form action={guardarVideoDiseno} className="space-y-3">
           <input type="hidden" name="id" value={design.id} />
-          <ImageDropzone name="images" multiple label="Agregar más imágenes" />
+          <VideoUploader name="video_path" label={design.video_url ? "Reemplazar video" : "Subir video"} />
           <button
             type="submit"
-            className="mt-3 bg-ricamo-black text-white text-sm font-semibold rounded-lg px-4 py-2"
+            className="bg-ricamo-black text-white text-sm font-semibold rounded-lg px-4 py-2"
           >
-            Subir imágenes
+            Guardar video
           </button>
         </form>
       </section>

@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
-import { uploadDesignImage } from "../../../lib/storage";
+import { uploadDesignImage, publicVideoUrl, removePublicFile } from "../../../lib/storage";
+import { MAX_DESIGN_IMAGES } from "../../../lib/designMedia";
 import { syncDesignPublication } from "../../../lib/catalogPublication";
 import {
   PRESENTATIONS,
@@ -38,10 +39,18 @@ export async function montarDiseno(formData: FormData) {
   // Todo se produce a la medida: cada prenda se ofrece en todas las tallas.
   const sizes = SIZE_OPTIONS;
   const images = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+  const videoPath = String(formData.get("video_path") ?? "").trim();
+  const videoUrl = videoPath ? publicVideoUrl(videoPath) : null;
 
   if (!name) fail("Ponle un nombre al diseño");
   if (!isDesignTechnique(technique)) fail("Elige estampado o bordado");
   if (presentationKeys.length === 0) fail("Marca al menos una prenda");
+  if (images.length > MAX_DESIGN_IMAGES) {
+    fail(`Máximo ${MAX_DESIGN_IMAGES} fotos por diseño`);
+  }
+  if (videoPath && !videoUrl) {
+    fail("El video no es válido, vuelve a subirlo");
+  }
   if (publish && images.length === 0) {
     fail("Sube al menos una foto para publicarlo en la página");
   }
@@ -82,7 +91,9 @@ export async function montarDiseno(formData: FormData) {
 
   const { data: design, error: designError } = await supabase
     .from("designs")
-    .insert({ name, technique, status: "aprobado" })
+    // video_url solo se envia si hay video: asi montar sin video funciona
+    // aunque la columna (0016_video_diseno.sql) aun no exista.
+    .insert({ name, technique, status: "aprobado", ...(videoUrl ? { video_url: videoUrl } : {}) })
     .select("id")
     .single();
 
@@ -99,6 +110,7 @@ export async function montarDiseno(formData: FormData) {
       .map((url) => url.split("/design-images/")[1])
       .filter((p): p is string => Boolean(p));
     if (paths.length > 0) await supabase.storage.from("design-images").remove(paths);
+    await removePublicFile(videoUrl);
     fail(message);
   };
 

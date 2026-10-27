@@ -7,7 +7,12 @@ export interface ProductCardData {
   name: string;
   imageUrl: string | null;
   priceCop: number;
+  // true si las prendas del diseño tienen precios distintos ("Desde $X").
+  priceFrom?: boolean;
   garmentType: string;
+  // En cuantas prendas distintas se ofrece el diseño (la tarjeta es una
+  // por diseño; la prenda se elige en el detalle).
+  garmentCount?: number;
   technique: string;
   badge?: "nuevo" | "mas_vendido";
   collectionName?: string | null;
@@ -69,9 +74,12 @@ export function ProductCard({ product }: { product: ProductCardData }) {
           {product.name}
         </p>
         <p className="text-xs text-ricamo-black/50 mt-0.5">
-          {GARMENT_LABELS[product.garmentType] ?? product.garmentType}
+          {product.garmentCount && product.garmentCount > 1
+            ? `Disponible en ${product.garmentCount} prendas`
+            : GARMENT_LABELS[product.garmentType] ?? product.garmentType}
         </p>
         <p className="text-sm font-bold mt-1">
+          {product.priceFrom && <span className="font-normal text-ricamo-black/60">Desde </span>}
           {currencyFormatter.format(product.priceCop)}
         </p>
       </div>

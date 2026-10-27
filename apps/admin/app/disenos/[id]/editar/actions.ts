@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
-import { uploadDesignImage } from "../../../../lib/storage";
+import { uploadDesignImage, publicVideoUrl, removePublicFile } from "../../../../lib/storage";
+import { MAX_DESIGN_IMAGES } from "../../../../lib/designMedia";
 
 const VALID_TECHNIQUES = ["bordado", "estampado"] as const;
 type DesignTechnique = (typeof VALID_TECHNIQUES)[number];
@@ -91,6 +92,16 @@ export async function agregarImagenesDiseno(formData: FormData) {
   let nextSortOrder = count ?? 0;
   const hadNoCover = nextSortOrder === 0;
 
+  const room = MAX_DESIGN_IMAGES - nextSortOrder;
+  if (images.length > room) {
+    fail(
+      id,
+      room <= 0
+        ? `Este diseño ya tiene ${MAX_DESIGN_IMAGES} fotos — elimina alguna para subir otra`
+        : `Solo caben ${room} foto(s) más (máximo ${MAX_DESIGN_IMAGES} por diseño)`
+    );
+  }
+
   for (const image of images) {
     try {
       const imageUrl = await uploadDesignImage(image, "disenos");
@@ -143,11 +154,82 @@ export async function eliminarImagenDiseno(formData: FormData) {
 
   const supabase = createServiceRoleClient();
 
-  const { error } = await supabase.from("design_images").delete().eq("id", imageId);
+  const { data: deleted, error } = await supabase
+    .from("design_images")
+    .delete()
+    .eq("id", imageId)
+    .select("image_url, is_cover");
 
   if (error) {
     fail(designId, "No se pudo eliminar la imagen: " + error.message);
   }
 
+  const removed = deleted?.[0];
+  if (removed) {
+    await removePublicFile(removed.image_url);
+    // Si se borro la portada, la primera foto que quede pasa a serlo.
+    if (removed.is_cover) {
+      const { data: next } = await supabase
+        .from("design_images")
+        .select("id")
+        .eq("design_id", designId)
+        .order("sort_order", { ascending: true })
+        .limit(1);
+      if (next?.[0]) {
+        await supabase.from("design_images").update({ is_cover: true }).eq("id", next[0].id);
+      }
+    }
+  }
+
   redirect(`/disenos/${designId}/editar`);
+}
+
+// Guarda (o reemplaza) el video del diseño. El archivo ya lo subio el
+// navegador directo a Storage (components/VideoUploader.tsx); aqui solo
+// llega su path. El video anterior, si habia, se borra del bucket.
+export async function guardarVideoDiseno(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
+  const videoPath = String(formData.get("video_path") ?? "").trim();
+
+  if (!id) {
+    redirect(`/disenos?error=${encodeURIComponent("Diseño inválido")}`);
+  }
+  if (!videoPath) {
+    fail(id, "Elige un video y espera a que termine de subir");
+  }
+  const videoUrl = publicVideoUrl(videoPath);
+  if (!videoUrl) {
+    fail(id, "El video no es válido, vuelve a subirlo");
+  }
+
+  const supabase = createServiceRoleClient();
+  const { data: current } = await supabase.from("designs").select("video_url").eq("id", id).maybeSingle();
+
+  const { error } = await supabase.from("designs").update({ video_url: videoUrl }).eq("id", id);
+  if (error) {
+    fail(id, "No se pudo guardar el video: " + error.message);
+  }
+  if (current?.video_url && current.video_url !== videoUrl) {
+    await removePublicFile(current.video_url);
+  }
+
+  redirect(`/disenos/${id}/editar`);
+}
+
+export async function quitarVideoDiseno(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) {
+    redirect(`/disenos?error=${encodeURIComponent("Diseño inválido")}`);
+  }
+
+  const supabase = createServiceRoleClient();
+  const { data: current } = await supabase.from("designs").select("video_url").eq("id", id).maybeSingle();
+
+  const { error } = await supabase.from("designs").update({ video_url: null }).eq("id", id);
+  if (error) {
+    fail(id, "No se pudo quitar el video: " + error.message);
+  }
+  await removePublicFile(current?.video_url);
+
+  redirect(`/disenos/${id}/editar`);
 }

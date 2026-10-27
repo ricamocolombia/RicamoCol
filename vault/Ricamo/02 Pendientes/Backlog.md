@@ -15,6 +15,8 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [ ] **QR y datos de la cuenta bancaria real de Maria Jose** (imagen del QR + banco/tipo de cuenta/número/titular) — sin esto, el checkout nuevo de `/catalogo/[slug]/comprar` (2026-09-08) solo le dice al cliente que escriba por WhatsApp en vez de mostrarle cómo pagar. Se configura en `/configuracion` → "Pago por transferencia", sin tocar código.
 
 ## Backend / datos
+- [ ] **Aplicar `supabase/migrations/0016_video_diseno.sql`** (2026-10-27) — `designs.video_url`. Sin esto no se pueden guardar videos de diseños (lo demás funciona).
+- [ ] Probar en vivo subir un video real desde "Montar diseño" y desde Editar diseño, y verlo en la web.
 - [x] **`supabase/migrations/0015_todas_las_tallas.sql` aplicada y verificada en vivo** (todos los productos con S–XXL) (2026-10-27) — completa todas las tallas en los productos existentes (hoy "Me vale mondá" solo tiene S). También se puede hacer prenda por prenda con "Completar tallas" en Diseños → Prendas y tallas.
 - [ ] Probar en vivo "Montar diseño" (nuevo flujo de `/disenos/nueva`, 2026-10-27) con un diseño real de Maria Jose — no se pudo verificar visualmente en la sesión.
 - [x] `supabase/migrations/0014_precios_prenda_estampado.sql` aplicada por el usuario y verificada en vivo (2026-10-27) — `garment_presentation_prices` con los 4 precios de estampado.

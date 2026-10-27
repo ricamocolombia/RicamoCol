@@ -3,6 +3,8 @@ import { createServiceRoleClient } from "@ricamo/supabase/server";
 import { montarDiseno } from "./actions";
 import { ImageDropzone } from "../../../components/ImageDropzone";
 import { GarmentPicker } from "../../../components/GarmentPicker";
+import { VideoUploader } from "../../../components/VideoUploader";
+import { MAX_DESIGN_IMAGES } from "../../../lib/designMedia";
 import { SIZE_OPTIONS } from "../../../lib/presentations";
 
 // Datos en vivo del negocio: nunca prerenderizar de forma estatica.
@@ -71,10 +73,15 @@ export default async function MontarDisenoPage({
           </div>
 
           <div>
-            <p className="block text-sm font-medium mb-1">Fotos *</p>
-            <p className="text-xs text-neutral-500 mb-2">La primera foto queda como portada.</p>
-            <ImageDropzone name="images" multiple />
+            <p className="block text-sm font-medium mb-1">Fotos * (hasta {MAX_DESIGN_IMAGES})</p>
+            <p className="text-xs text-neutral-500 mb-2">
+              La primera foto queda como portada. Muestra la prenda puesta, detalles del bordado o
+              estampado, la espalda…
+            </p>
+            <ImageDropzone name="images" multiple maxFiles={MAX_DESIGN_IMAGES} />
           </div>
+
+          <VideoUploader name="video_path" />
         </section>
 
         <section className="rounded-xl border border-neutral-200 bg-white p-6 space-y-5">

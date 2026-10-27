@@ -9,6 +9,9 @@ import { attachCatalogData, type CatalogProductInput } from "../lib/catalog";
 export const dynamic = "force-dynamic";
 
 const FEATURED_LIMIT = 8;
+// Se piden mas productos que tarjetas: cada diseño trae un producto por
+// prenda y se agrupan en una sola tarjeta (lib/catalog.ts).
+const FETCH_LIMIT = FEATURED_LIMIT * 6;
 const PRODUCT_COLUMNS =
   "id, design_id, name, slug, garment_type, technique, base_price_cop, collection_id, is_bestseller, created_at";
 
@@ -31,26 +34,28 @@ async function getFeaturedProducts(): Promise<ProductCardData[]> {
     .eq("is_published", true)
     .eq("is_featured", true)
     .order("created_at", { ascending: false })
-    .limit(FEATURED_LIMIT);
+    .limit(FETCH_LIMIT);
 
   const featured = (featuredData ?? []) as unknown as CatalogProductInput[];
   let products = featured;
 
-  if (products.length < FEATURED_LIMIT) {
+  // El cupo es de diseños (tarjetas), no de productos.
+  const featuredDesigns = new Set(featured.map((p) => p.design_id ?? p.id)).size;
+  if (featuredDesigns < FEATURED_LIMIT) {
     const { data: recentData } = await supabase
       .from("products")
       .select(PRODUCT_COLUMNS)
       .eq("is_published", true)
       .order("created_at", { ascending: false })
-      .limit(FEATURED_LIMIT);
+      .limit(FETCH_LIMIT);
 
     const seen = new Set(products.map((p) => p.id));
     const recent = ((recentData ?? []) as unknown as CatalogProductInput[]).filter((p) => !seen.has(p.id));
-    products = [...products, ...recent].slice(0, FEATURED_LIMIT);
+    products = [...products, ...recent];
   }
 
   if (products.length === 0) return [];
-  return attachCatalogData(supabase, products);
+  return (await attachCatalogData(supabase, products)).slice(0, FEATURED_LIMIT);
 }
 
 async function getBestsellerProducts(): Promise<ProductCardData[]> {
@@ -62,11 +67,11 @@ async function getBestsellerProducts(): Promise<ProductCardData[]> {
     .eq("is_published", true)
     .eq("is_bestseller", true)
     .order("created_at", { ascending: false })
-    .limit(FEATURED_LIMIT);
+    .limit(FETCH_LIMIT);
 
   const products = (data ?? []) as unknown as CatalogProductInput[];
   if (products.length === 0) return [];
-  return attachCatalogData(supabase, products);
+  return (await attachCatalogData(supabase, products)).slice(0, FEATURED_LIMIT);
 }
 
 async function getActiveCollections(): Promise<CollectionTeaserRow[]> {
