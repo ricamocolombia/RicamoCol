@@ -15,12 +15,16 @@ function isDesignTechnique(value: string): value is DesignTechnique {
   return (VALID_TECHNIQUES as readonly string[]).includes(value);
 }
 
+// Nombre, tecnica y descripcion publica. La descripcion vive en cada
+// listado (products.description, es lo que muestra la web) y se aplica a
+// todas las prendas del diseño. La tecnica solo se puede cambiar mientras
+// el diseño no tenga prendas: el precio de cada prenda depende de ella.
 export async function actualizarDiseno(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const technique = String(formData.get("technique") ?? "").trim();
-  const customerId = String(formData.get("customer_id") ?? "").trim();
-  const notes = String(formData.get("notes") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const renameProducts = formData.get("rename_products") === "on";
 
   if (!id) {
     redirect(`/disenos?error=${encodeURIComponent("Diseño inválido")}`);
@@ -34,18 +38,31 @@ export async function actualizarDiseno(formData: FormData) {
 
   const supabase = createServiceRoleClient();
 
-  const { error } = await supabase
-    .from("designs")
-    .update({
-      name,
-      technique,
-      customer_id: customerId || null,
-      notes: notes || null,
-    })
-    .eq("id", id);
+  const [{ data: current }, { count: productCount }] = await Promise.all([
+    supabase.from("designs").select("technique").eq("id", id).maybeSingle(),
+    supabase.from("products").select("id", { count: "exact", head: true }).eq("design_id", id),
+  ]);
+
+  if (!current) {
+    redirect(`/disenos?error=${encodeURIComponent("No se encontró el diseño")}`);
+  }
+  if ((productCount ?? 0) > 0 && current.technique !== technique) {
+    fail(id, "No se puede cambiar la técnica de un diseño que ya tiene prendas");
+  }
+
+  const { error } = await supabase.from("designs").update({ name, technique }).eq("id", id);
 
   if (error) {
     fail(id, "No se pudo actualizar el diseño: " + error.message);
+  }
+
+  const { error: productsError } = await supabase
+    .from("products")
+    .update(renameProducts ? { description: description || null, name } : { description: description || null })
+    .eq("design_id", id);
+
+  if (productsError) {
+    fail(id, "El diseño se guardó, pero no se pudo actualizar la descripción: " + productsError.message);
   }
 
   redirect("/disenos");

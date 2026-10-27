@@ -15,6 +15,8 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [ ] **QR y datos de la cuenta bancaria real de Maria Jose** (imagen del QR + banco/tipo de cuenta/número/titular) — sin esto, el checkout nuevo de `/catalogo/[slug]/comprar` (2026-09-08) solo le dice al cliente que escriba por WhatsApp en vez de mostrarle cómo pagar. Se configura en `/configuracion` → "Pago por transferencia", sin tocar código.
 
 ## Backend / datos
+- [x] **`supabase/migrations/0015_todas_las_tallas.sql` aplicada y verificada en vivo** (todos los productos con S–XXL) (2026-10-27) — completa todas las tallas en los productos existentes (hoy "Me vale mondá" solo tiene S). También se puede hacer prenda por prenda con "Completar tallas" en Diseños → Prendas y tallas.
+- [ ] Probar en vivo "Montar diseño" (nuevo flujo de `/disenos/nueva`, 2026-10-27) con un diseño real de Maria Jose — no se pudo verificar visualmente en la sesión.
 - [x] `supabase/migrations/0014_precios_prenda_estampado.sql` aplicada por el usuario y verificada en vivo (2026-10-27) — `garment_presentation_prices` con los 4 precios de estampado.
 - [ ] Decidir a qué presentación nueva (Camiseta Regular/Oversize, Buzo Cuello Redondo/Capucha) mapear los productos viejos con `garment_type` `camiseta`/`buzo` (hoy "Me vale mondá" publicado es `camiseta`) — si no, conviven ambos nombres en los filtros de la web.
 - [ ] Cambiar el precio de estampado en `/configuracion` no actualiza listados/tallas ya creados (solo aplica a los nuevos) — decidir si debe propagarse.

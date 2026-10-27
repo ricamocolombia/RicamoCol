@@ -16,16 +16,9 @@ interface DesignRow {
   id: string;
   name: string;
   technique: DesignTechnique;
-  customer_id: string | null;
   image_url: string | null;
-  notes: string | null;
 }
 
-interface CustomerRow {
-  id: string;
-  full_name: string;
-  phone: string | null;
-}
 
 interface DesignImageRow {
   id: string;
@@ -47,16 +40,17 @@ export default async function EditarDisenoPage({
   const { error } = await searchParams;
   const supabase = createServiceRoleClient();
 
-  const [{ data: designData }, { data: customersData }, { data: imagesData }] = await Promise.all([
+  const [{ data: designData }, { data: productsData }, { data: imagesData }] = await Promise.all([
     supabase
       .from("designs")
-      .select("id, name, technique, customer_id, image_url, notes")
+      .select("id, name, technique, image_url")
       .eq("id", id)
       .maybeSingle(),
     supabase
-      .from("customers")
-      .select("id, full_name, phone")
-      .order("full_name", { ascending: true }),
+      .from("products")
+      .select("description")
+      .eq("design_id", id)
+      .order("created_at", { ascending: true }),
     supabase
       .from("design_images")
       .select("id, image_url, is_cover")
@@ -65,7 +59,9 @@ export default async function EditarDisenoPage({
   ]);
 
   const design = designData as unknown as DesignRow | null;
-  const customers = (customersData ?? []) as unknown as CustomerRow[];
+  const products = (productsData ?? []) as unknown as { description: string | null }[];
+  const hasProducts = products.length > 0;
+  const currentDescription = products.find((p) => p.description)?.description ?? "";
   const images = (imagesData ?? []) as unknown as DesignImageRow[];
 
   if (!design) {
@@ -116,48 +112,46 @@ export default async function EditarDisenoPage({
               name="technique"
               required
               defaultValue={design.technique}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 disabled:bg-neutral-50 disabled:text-neutral-500"
+              disabled={hasProducts}
             >
               <option value="bordado">Bordado</option>
               <option value="estampado">Estampado</option>
             </select>
+            {hasProducts && (
+              <>
+                {/* Un select deshabilitado no se envia: se manda la tecnica actual. */}
+                <input type="hidden" name="technique" value={design.technique} />
+                <p className="text-xs text-neutral-500 mt-1">
+                  No se puede cambiar: el diseño ya tiene prendas con precio de {design.technique}.
+                </p>
+              </>
+            )}
           </div>
 
           <div>
-            <label
-              htmlFor="customer_id"
-              className="block text-sm font-medium mb-1"
-            >
-              Cliente vinculado (opcional)
-            </label>
-            <select
-              id="customer_id"
-              name="customer_id"
-              defaultValue={design.customer_id ?? ""}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
-            >
-              <option value="">— Sin cliente / diseño propio —</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name}
-                  {c.phone ? ` · ${c.phone}` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="notes" className="block text-sm font-medium mb-1">
-              Notas
+            <label htmlFor="description" className="block text-sm font-medium mb-1">
+              Descripción
             </label>
             <textarea
-              id="notes"
-              name="notes"
+              id="description"
+              name="description"
               rows={3}
-              defaultValue={design.notes ?? ""}
+              defaultValue={currentDescription}
+              placeholder="Lo que verán los clientes en la página del producto"
               className="w-full rounded-lg border border-neutral-300 px-3 py-2"
             />
+            {hasProducts && (
+              <p className="text-xs text-neutral-500 mt-1">Se aplica a todas las prendas de este diseño.</p>
+            )}
           </div>
+
+          {hasProducts && (
+            <label className="flex items-center gap-2 text-sm text-neutral-600 cursor-pointer">
+              <input type="checkbox" name="rename_products" defaultChecked className="rounded border-neutral-300" />
+              Usar este nombre también en la página
+            </label>
+          )}
         </section>
 
         <button

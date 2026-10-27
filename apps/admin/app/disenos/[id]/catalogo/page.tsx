@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
+import { PRESENTATIONS, PRESENTATION_LABELS, SIZE_OPTIONS, priceFieldName } from "../../../../lib/presentations";
 import {
   agregarPresentaciones,
-  agregarTalla,
-  eliminarTalla,
+  completarTallas,
+  actualizarPrecioListado,
   actualizarListadoCatalogo,
   toggleListadoPublicado,
 } from "./actions";
@@ -72,46 +73,11 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-const SIZE_SEED = ["4", "6", "8", "10", "12", "14", "16", "S", "M", "L", "XL", "XXL"];
-
-// Catalogo fijo de presentaciones (prenda + corte). En estampado el precio
-// es fijo por presentacion (garment_presentation_prices, editable en
-// /configuracion); en bordado el precio varia por diseño y se escribe a
-// mano. Duplicado en actions.ts (esa copia valida lo que llega del form).
-const PRESENTATIONS = [
-  {
-    key: "camiseta regular",
-    label: "Camiseta Regular",
-    techniques: ["bordado", "estampado"],
-    estampadoPriceKey: "estampado_camiseta_regular",
-  },
-  {
-    key: "camiseta oversize",
-    label: "Camiseta Oversize",
-    techniques: ["bordado", "estampado"],
-    estampadoPriceKey: "estampado_camiseta_oversize",
-  },
-  {
-    key: "buzo cuello redondo",
-    label: "Buzo Cuello Redondo",
-    techniques: ["bordado", "estampado"],
-    estampadoPriceKey: "estampado_buzo_cuello_redondo",
-  },
-  {
-    key: "buzo capucha",
-    label: "Buzo Capucha",
-    techniques: ["bordado", "estampado"],
-    estampadoPriceKey: "estampado_buzo_capucha",
-  },
-  { key: "tank top", label: "Tank top", techniques: ["bordado"], estampadoPriceKey: null },
-] as const;
-
-const PRESENTATION_LABELS: Record<string, string> = Object.fromEntries(
-  PRESENTATIONS.map((p) => [p.key, p.label])
-);
-
-function priceFieldName(key: string): string {
-  return `price__${key.replace(/\s+/g, "_")}`;
+// Todo se produce a la medida despues del pago: cada prenda se ofrece en
+// todas las tallas (SIZE_OPTIONS). Devuelve las que le faltan a un listado.
+function missingSizes(variants: { size: string }[]): string[] {
+  const have = new Set(variants.map((v) => v.size));
+  return SIZE_OPTIONS.filter((size) => !have.has(size));
 }
 
 export default async function DisenoCatalogoPage({
@@ -244,9 +210,8 @@ export default async function DisenoCatalogoPage({
         <div>
           <h1 className="text-2xl font-bold">{design.name}</h1>
           <p className="text-sm text-neutral-500">
-            {TECHNIQUE_LABELS[design.technique] ?? design.technique} — el estado (
-            {design.status}) es solo del flujo de producción, no bloquea publicar
-            este diseño en el catálogo.
+            {TECHNIQUE_LABELS[design.technique] ?? design.technique} — prendas, tallas,
+            colección y publicación de cada prenda de este diseño.
           </p>
         </div>
       </div>
@@ -298,58 +263,33 @@ export default async function DisenoCatalogoPage({
                 </div>
               </div>
 
-              <div className="mb-4">
-                <p className="text-xs font-medium text-neutral-500 mb-2">Tallas disponibles</p>
-                {productVariants.length === 0 ? (
-                  <p className="text-xs text-neutral-400 mb-2">
-                    Todavía no tiene tallas cargadas — agrega al menos una para publicarlo.
+              <div className="mb-4 space-y-3">
+                <div>
+                  <p className="text-xs font-medium text-neutral-500 mb-1">Tallas</p>
+                  <p className="text-sm text-neutral-700">
+                    {productVariants.length > 0
+                      ? productVariants.map((v) => v.size).join(" · ")
+                      : "Sin tallas"}
                   </p>
-                ) : (
-                  <table className="w-full text-sm mb-2">
-                    <tbody>
-                      {productVariants.map((variant) => (
-                        <tr key={variant.id} className="border-b border-neutral-100 last:border-0">
-                          <td className="py-1.5 font-medium">{variant.size}</td>
-                          <td className="py-1.5 text-neutral-500">
-                            {currencyFormatter.format(variant.price_cop)}
-                          </td>
-                          <td className="py-1.5 text-right">
-                            <form action={eliminarTalla}>
-                              <input type="hidden" name="design_id" value={designId} />
-                              <input type="hidden" name="variant_id" value={variant.id} />
-                              <button
-                                type="submit"
-                                className="text-xs text-neutral-400 hover:text-ricamo-red underline underline-offset-2"
-                              >
-                                Eliminar
-                              </button>
-                            </form>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                  {missingSizes(productVariants).length > 0 && (
+                    <form action={completarTallas} className="mt-2">
+                      <input type="hidden" name="design_id" value={designId} />
+                      <input type="hidden" name="product_id" value={product.id} />
+                      <button
+                        type="submit"
+                        className="text-xs font-semibold text-ricamo-black bg-ricamo-yellow rounded-lg px-3 py-1.5"
+                      >
+                        Completar tallas ({missingSizes(productVariants).join(", ")})
+                      </button>
+                    </form>
+                  )}
+                </div>
 
-                <form action={agregarTalla} className="flex items-end gap-2 flex-wrap">
+                <form action={actualizarPrecioListado} className="flex items-end gap-2 flex-wrap">
                   <input type="hidden" name="design_id" value={designId} />
                   <input type="hidden" name="product_id" value={product.id} />
                   <div>
-                    <label className="block text-xs text-neutral-500 mb-1">Talla</label>
-                    <input
-                      name="size"
-                      list={`sizes-${product.id}`}
-                      required
-                      className="rounded-lg border border-neutral-300 px-2 py-1.5 text-sm w-24"
-                    />
-                    <datalist id={`sizes-${product.id}`}>
-                      {SIZE_SEED.map((size) => (
-                        <option key={size} value={size} />
-                      ))}
-                    </datalist>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-neutral-500 mb-1">Precio</label>
+                    <label className="block text-xs text-neutral-500 mb-1">Precio (todas las tallas)</label>
                     <input
                       type="number"
                       name="price_cop"
@@ -362,9 +302,9 @@ export default async function DisenoCatalogoPage({
                   </div>
                   <button
                     type="submit"
-                    className="text-xs font-semibold text-ricamo-black bg-ricamo-yellow rounded-lg px-3 py-1.5 whitespace-nowrap"
+                    className="text-xs font-semibold text-white bg-ricamo-black rounded-lg px-3 py-1.5 whitespace-nowrap"
                   >
-                    + Agregar talla
+                    Guardar precio
                   </button>
                 </form>
               </div>

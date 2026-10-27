@@ -28,6 +28,7 @@ export async function crearPedidoConComprobante(formData: FormData) {
   const city = String(formData.get("city") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim();
   const quantityRaw = String(formData.get("quantity") ?? "1");
+  const adaptation = String(formData.get("adaptation") ?? "").trim().slice(0, 1000);
   const paymentProof = formData.get("payment_proof");
 
   if (!productId || !variantId) {
@@ -112,7 +113,12 @@ export async function crearPedidoConComprobante(formData: FormData) {
     payment_proof_uploaded_at: new Date().toISOString(),
     // La direccion de envio va en el pedido: si el cliente ya existia, su
     // ficha conserva la direccion vieja (ver lib/customers.ts).
-    notes: [address && `Envío a: ${address}`, city && `Ciudad: ${city}`, email && `Correo: ${email}`]
+    notes: [
+      adaptation && `Adaptación pedida: ${adaptation}`,
+      address && `Envío a: ${address}`,
+      city && `Ciudad: ${city}`,
+      email && `Correo: ${email}`,
+    ]
       .filter(Boolean)
       .join(" · ") || null,
   });

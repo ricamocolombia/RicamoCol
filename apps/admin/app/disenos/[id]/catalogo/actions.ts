@@ -3,79 +3,16 @@
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 import { syncDesignPublication, productHasSizes } from "../../../../lib/catalogPublication";
-
-function slugify(input: string): string {
-  return input
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "") // quita tildes tras la normalizacion NFD
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-}
+import {
+  PRESENTATIONS,
+  SIZE_OPTIONS,
+  priceFieldName,
+  crearSlugUnico,
+  insertarTallasFaltantes,
+} from "../../../../lib/presentations";
 
 function fail(designId: string, message: string): never {
   redirect(`/disenos/${designId}/catalogo?error=${encodeURIComponent(message)}`);
-}
-
-// Catalogo fijo de presentaciones (prenda + corte) que ofrece el negocio.
-// En estampado el precio es fijo por presentacion (garment_presentation_prices,
-// configurable en /configuracion); en bordado el precio varia por diseno y
-// se escribe a mano. Duplicado en page.tsx (misma constante, ese archivo la
-// usa para renderizar los checkboxes).
-const PRESENTATIONS = [
-  {
-    key: "camiseta regular",
-    label: "Camiseta Regular",
-    techniques: ["bordado", "estampado"],
-    estampadoPriceKey: "estampado_camiseta_regular",
-  },
-  {
-    key: "camiseta oversize",
-    label: "Camiseta Oversize",
-    techniques: ["bordado", "estampado"],
-    estampadoPriceKey: "estampado_camiseta_oversize",
-  },
-  {
-    key: "buzo cuello redondo",
-    label: "Buzo Cuello Redondo",
-    techniques: ["bordado", "estampado"],
-    estampadoPriceKey: "estampado_buzo_cuello_redondo",
-  },
-  {
-    key: "buzo capucha",
-    label: "Buzo Capucha",
-    techniques: ["bordado", "estampado"],
-    estampadoPriceKey: "estampado_buzo_capucha",
-  },
-  { key: "tank top", label: "Tank top", techniques: ["bordado"], estampadoPriceKey: null },
-] as const;
-
-// El input de precio de cada presentacion (solo aplica en bordado) se
-// nombra price__<key con espacios como guion bajo> -- mismo criterio en
-// page.tsx al armar el formulario.
-function priceFieldName(key: string): string {
-  return `price__${key.replace(/\s+/g, "_")}`;
-}
-
-async function crearSlugUnico(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  base: string
-): Promise<string> {
-  const baseSlug = slugify(base) || "producto";
-  let slug = baseSlug;
-  let suffix = 1;
-  while (suffix <= 20) {
-    const { data: collision } = await supabase
-      .from("products")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (!collision) break;
-    suffix += 1;
-    slug = `${baseSlug}-${suffix}`;
-  }
-  return slug;
 }
 
 // Crea uno o varios listados (product) para este diseño de una sola vez,
@@ -157,7 +94,7 @@ export async function agregarPresentaciones(formData: FormData) {
 
   // Un solo insert: o se crean todos los listados marcados o ninguno.
   if (toInsert.length > 0) {
-    const { error: productError } = await supabase.from("products").insert(
+    const { data: created, error: productError } = await supabase.from("products").insert(
       toInsert.map((item) => ({
         design_id: designId,
         name: design.name,
@@ -167,102 +104,73 @@ export async function agregarPresentaciones(formData: FormData) {
         base_price_cop: item.base_price_cop,
         is_published: false,
       }))
-    );
+    ).select("id, base_price_cop");
 
-    if (productError) {
-      fail(designId, "No se pudieron crear los listados: " + productError.message);
+    if (productError || !created) {
+      fail(designId, "No se pudieron crear los listados: " + (productError?.message ?? "error desconocido"));
+    }
+
+    // Cada prenda nace con todas las tallas (todo se produce a la medida).
+    const { error: variantsError } = await supabase.from("product_variants").insert(
+      created.flatMap((product) =>
+        SIZE_OPTIONS.map((size) => ({ product_id: product.id, size, price_cop: product.base_price_cop }))
+      )
+    );
+    if (variantsError) {
+      fail(designId, "Se crearon las prendas pero no sus tallas: " + variantsError.message);
     }
   }
 
   redirect(`/disenos/${designId}/catalogo`);
 }
 
-export async function agregarTalla(formData: FormData) {
+// Todo se produce a la medida despues del pago, asi que cada prenda se
+// ofrece siempre en todas las tallas (SIZE_OPTIONS): esto agrega las que
+// le falten a un listado, al precio del listado.
+export async function completarTallas(formData: FormData) {
   const designId = String(formData.get("design_id") ?? "").trim();
   const productId = String(formData.get("product_id") ?? "").trim();
-  const size = String(formData.get("size") ?? "").trim();
-  const priceRaw = String(formData.get("price_cop") ?? "");
 
   if (!designId || !productId) {
     redirect(`/disenos?error=${encodeURIComponent("Datos inválidos")}`);
   }
-  if (!size) {
-    fail(designId, "La talla es obligatoria");
-  }
+
   const supabase = createServiceRoleClient();
-
-  // Sin precio propio, la talla hereda el precio del listado -- es el que se
-  // muestra en el catalogo, y el checkout cobra el de la talla.
-  let price: number;
-  if (priceRaw.trim() === "") {
-    const { data: product } = await supabase
-      .from("products")
-      .select("base_price_cop")
-      .eq("id", productId)
-      .maybeSingle();
-    if (!product) {
-      fail(designId, "No se encontró el listado");
-    }
-    price = product.base_price_cop;
-  } else {
-    price = Number.parseInt(priceRaw, 10);
-    if (!Number.isFinite(price) || price <= 0) {
-      fail(designId, "El precio de la talla debe ser un número mayor a 0");
-    }
-  }
-
-  const { error } = await supabase.from("product_variants").insert({
-    product_id: productId,
-    size,
-    price_cop: price,
-  });
-
+  const { error } = await insertarTallasFaltantes(supabase, productId);
   if (error) {
-    fail(designId, "No se pudo agregar la talla: " + error.message);
+    fail(designId, "No se pudieron completar las tallas: " + error);
   }
 
   redirect(`/disenos/${designId}/catalogo`);
 }
 
-export async function eliminarTalla(formData: FormData) {
+// Cambia el precio de una prenda: el del listado (lo que muestra la web)
+// y el de todas sus tallas (lo que cobra el checkout), para que nunca se
+// desalineen.
+export async function actualizarPrecioListado(formData: FormData) {
   const designId = String(formData.get("design_id") ?? "").trim();
-  const variantId = String(formData.get("variant_id") ?? "").trim();
+  const productId = String(formData.get("product_id") ?? "").trim();
+  const price = Number.parseInt(String(formData.get("price_cop") ?? ""), 10);
 
-  if (!designId || !variantId) {
+  if (!designId || !productId) {
     redirect(`/disenos?error=${encodeURIComponent("Datos inválidos")}`);
+  }
+  if (!Number.isFinite(price) || price <= 0) {
+    fail(designId, "El precio debe ser un número mayor a 0");
   }
 
   const supabase = createServiceRoleClient();
 
-  const { data: variant } = await supabase
-    .from("product_variants")
-    .select("product_id")
-    .eq("id", variantId)
-    .maybeSingle();
-
-  if (variant) {
-    const [{ data: product }, { count }] = await Promise.all([
-      supabase.from("products").select("is_published").eq("id", variant.product_id).maybeSingle(),
-      supabase
-        .from("product_variants")
-        .select("id", { count: "exact", head: true })
-        .eq("product_id", variant.product_id),
-    ]);
-    if (product?.is_published && (count ?? 0) <= 1) {
-      fail(designId, "Es la única talla de un listado publicado — despublícalo primero o agrega otra talla");
-    }
-  }
-
-  const { error } = await supabase.from("product_variants").delete().eq("id", variantId);
-
+  const { error } = await supabase.from("products").update({ base_price_cop: price }).eq("id", productId);
   if (error) {
-    // 23503: la talla ya aparece en pedidos (order_items la referencia).
-    fail(
-      designId,
-      error.code === "23503"
-        ? "Esa talla ya tiene ventas registradas, no se puede eliminar"
-        : "No se pudo eliminar la talla: " + error.message
-    );
+    fail(designId, "No se pudo cambiar el precio: " + error.message);
+  }
+  const { error: variantsError } = await supabase
+    .from("product_variants")
+    .update({ price_cop: price })
+    .eq("product_id", productId);
+  if (variantsError) {
+    fail(designId, "Se cambió el precio de la prenda pero no el de sus tallas: " + variantsError.message);
   }
 
   redirect(`/disenos/${designId}/catalogo`);

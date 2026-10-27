@@ -76,7 +76,7 @@ export async function toggleProductoPublicado(formData: FormData) {
   const newValue = !isPublished;
 
   if (newValue && !(await productHasSizes(supabase, id))) {
-    fail("Ese producto no tiene tallas — agrégalas desde Diseños → Gestionar catálogo antes de publicarlo");
+    fail("Ese producto no tiene tallas — agrégalas desde Diseños → Prendas y tallas antes de publicarlo");
   }
 
   const { data: product, error: productError } = await supabase

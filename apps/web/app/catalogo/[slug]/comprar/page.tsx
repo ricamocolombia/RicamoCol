@@ -182,6 +182,23 @@ export default async function ComprarPage({
             </div>
             <QuantityTotal unitPriceCop={variant.price_cop} max={20} />
           </div>
+          <div>
+            <label htmlFor="adaptation" className="block text-sm font-medium mb-1">
+              ¿Quieres alguna adaptación? (opcional)
+            </label>
+            <textarea
+              id="adaptation"
+              name="adaptation"
+              rows={3}
+              maxLength={1000}
+              placeholder="Ej: cambiar el nombre de la ciudad, otro color de hilo, agregar una fecha..."
+              className="w-full rounded-xl border border-black/15 px-4 py-2.5"
+            />
+            <p className="text-xs text-ricamo-black/50 mt-1">
+              Cada prenda se hace a tu medida. Si pides un cambio, Maria Jose te
+              confirma por WhatsApp antes de producirla.
+            </p>
+          </div>
         </div>
 
         <div className="rounded-3xl bg-white border border-black/10 p-6 space-y-5">

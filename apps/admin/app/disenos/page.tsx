@@ -1,37 +1,20 @@
 import Link from "next/link";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
-import { updateDesignStatus } from "./actions";
-
-type DesignTechnique = "bordado" | "estampado";
-type DesignStatus =
-  | "borrador"
-  | "enviado_aprobacion"
-  | "aprobado"
-  | "enviado_maquiladora"
-  | "archivado";
+import { cambiarPublicacionDiseno } from "./actions";
+import { PRESENTATION_LABELS } from "../../lib/presentations";
 
 interface DesignRow {
   id: string;
   name: string;
-  technique: DesignTechnique;
-  status: DesignStatus;
-  customer_id: string | null;
+  technique: "bordado" | "estampado";
   image_url: string | null;
-  notes: string | null;
-  published_to_ecommerce: boolean;
-  published_at: string | null;
   created_at: string;
-}
-
-interface CustomerRow {
-  id: string;
-  full_name: string;
-  phone: string | null;
 }
 
 interface ProductRow {
   id: string;
   design_id: string | null;
+  garment_type: string;
   is_published: boolean;
   base_price_cop: number;
 }
@@ -42,42 +25,15 @@ interface DesignImageRow {
   is_cover: boolean;
 }
 
-const TECHNIQUE_LABELS: Record<DesignTechnique, string> = {
+const TECHNIQUE_LABELS: Record<string, string> = {
   bordado: "Bordado",
   estampado: "Estampado",
 };
 
-const STATUS_LABELS: Record<DesignStatus, string> = {
-  borrador: "Borrador",
-  enviado_aprobacion: "Enviado a aprobación",
-  aprobado: "Aprobado",
-  enviado_maquiladora: "Enviado a maquiladora",
-  archivado: "Archivado",
-};
-
-const STATUS_STYLES: Record<DesignStatus, string> = {
-  borrador: "bg-neutral-100 text-neutral-600",
-  enviado_aprobacion: "bg-yellow-100 text-yellow-800",
-  aprobado: "bg-blue-100 text-blue-700",
-  enviado_maquiladora: "bg-purple-100 text-purple-700",
-  archivado: "bg-neutral-200 text-neutral-500",
-};
-
-// Accion "hacia adelante" sugerida segun el estado actual del flujo:
-// borrador -> enviado_aprobacion -> aprobado -> enviado_maquiladora -> archivado
-const FORWARD_ACTION: Partial<
-  Record<DesignStatus, { status: DesignStatus; label: string }>
-> = {
-  borrador: { status: "enviado_aprobacion", label: "Enviar a aprobación" },
-  enviado_aprobacion: { status: "aprobado", label: "Aprobar" },
-  aprobado: { status: "enviado_maquiladora", label: "Enviar a maquiladora" },
-  enviado_maquiladora: { status: "archivado", label: "Archivar" },
-};
-
-const dateFormatter = new Intl.DateTimeFormat("es-CO", {
-  timeZone: "America/Bogota",
-  dateStyle: "medium",
-  timeStyle: "short",
+const currencyFormatter = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
 });
 
 // Datos en vivo del negocio: nunca prerenderizar de forma estatica.
@@ -86,261 +42,166 @@ export const dynamic = "force-dynamic";
 export default async function DisenosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
-  const { error: errorParam } = await searchParams;
+  const { error: errorParam, ok } = await searchParams;
   const supabase = createServiceRoleClient();
 
-  const [
-    { data: designsData, error: designsError },
-    { data: customersData },
-    { data: productsData },
-    { data: imagesData },
-  ] = await Promise.all([
-    supabase
-      .from("designs")
-      .select(
-        "id, name, technique, status, customer_id, image_url, notes, published_to_ecommerce, published_at, created_at"
-      )
-      .order("created_at", { ascending: false }),
-    supabase.from("customers").select("id, full_name, phone"),
-    supabase.from("products").select("id, design_id, is_published, base_price_cop"),
-    supabase.from("design_images").select("design_id, image_url, is_cover"),
-  ]);
+  const [{ data: designsData, error: designsError }, { data: productsData }, { data: imagesData }] =
+    await Promise.all([
+      supabase
+        .from("designs")
+        .select("id, name, technique, image_url, created_at")
+        .order("created_at", { ascending: false }),
+      supabase.from("products").select("id, design_id, garment_type, is_published, base_price_cop"),
+      supabase.from("design_images").select("design_id, image_url, is_cover"),
+    ]);
 
   const designs = (designsData ?? []) as unknown as DesignRow[];
-  const customers = (customersData ?? []) as unknown as CustomerRow[];
   const products = (productsData ?? []) as unknown as ProductRow[];
   const images = (imagesData ?? []) as unknown as DesignImageRow[];
-  const customersById = new Map(customers.map((c) => [c.id, c]));
-  const productByDesignId = new Map(
-    products.filter((p) => p.design_id).map((p) => [p.design_id as string, p])
-  );
+
+  const productsByDesignId = new Map<string, ProductRow[]>();
+  for (const product of products) {
+    if (!product.design_id) continue;
+    const list = productsByDesignId.get(product.design_id) ?? [];
+    list.push(product);
+    productsByDesignId.set(product.design_id, list);
+  }
 
   // Portada de la galeria (is_cover), o la primera imagen si ninguna esta
-  // marcada, por diseño. Se resuelve una sola vez para toda la tabla.
+  // marcada, por diseño.
   const coverByDesignId = new Map<string, string>();
   for (const img of images) {
-    const current = coverByDesignId.get(img.design_id);
-    if (!current || img.is_cover) {
+    if (!coverByDesignId.get(img.design_id) || img.is_cover) {
       coverByDesignId.set(img.design_id, img.image_url);
     }
   }
 
   return (
     <main className="px-6 py-10">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold mb-1">Diseños</h1>
           <p className="text-neutral-600">
-            Banco de diseños de Maria Jose (bordado y estampado). El estado
-            es solo para llevar el flujo de producción — cualquier diseño se
-            puede gestionar y publicar al catálogo, esté en el estado que
-            esté.
+            Los diseños del catálogo de Maria Jose. Lo que está publicado se ve en la página.
           </p>
         </div>
         <Link
           href="/disenos/nueva"
           className="bg-ricamo-yellow text-ricamo-black font-semibold rounded-lg px-4 py-2 whitespace-nowrap"
         >
-          + Nuevo diseño
+          + Montar diseño
         </Link>
       </div>
 
-      {errorParam && (
-        <p className="text-sm text-ricamo-red mb-4">{errorParam}</p>
-      )}
-      {designsError && (
-        <p className="text-sm text-ricamo-red mb-4">
-          Error cargando diseños: {designsError.message}
+      {ok && (
+        <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-4 py-2 mb-4">
+          {ok}
         </p>
       )}
+      {errorParam && <p className="text-sm text-ricamo-red mb-4">{errorParam}</p>}
+      {designsError && (
+        <p className="text-sm text-ricamo-red mb-4">Error cargando diseños: {designsError.message}</p>
+      )}
 
-      <div className="rounded-xl border border-neutral-200 bg-white overflow-hidden overflow-x-auto">
-        {designs.length === 0 ? (
-          <p className="p-6 text-neutral-500 text-sm">
-            Todavía no hay diseños registrados.
-          </p>
-        ) : (
-          <table className="w-full text-sm min-w-[1000px]">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="px-4 py-3 font-medium">Diseño</th>
-                <th className="px-4 py-3 font-medium">Técnica</th>
-                <th className="px-4 py-3 font-medium">Estado</th>
-                <th className="px-4 py-3 font-medium">Ecommerce</th>
-                <th className="px-4 py-3 font-medium">Cliente</th>
-                <th className="px-4 py-3 font-medium">Creado</th>
-                <th className="px-4 py-3 font-medium">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {designs.map((design) => {
-                const customer = design.customer_id
-                  ? customersById.get(design.customer_id)
-                  : undefined;
-                const forward = FORWARD_ACTION[design.status];
-                const product = productByDesignId.get(design.id);
-                const thumbnail = coverByDesignId.get(design.id) ?? design.image_url;
+      {designs.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-10 text-center">
+          <p className="text-neutral-500 mb-4">Todavía no hay diseños.</p>
+          <Link
+            href="/disenos/nueva"
+            className="inline-block bg-ricamo-yellow text-ricamo-black font-semibold rounded-lg px-4 py-2"
+          >
+            Montar el primero
+          </Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {designs.map((design) => {
+            const designProducts = productsByDesignId.get(design.id) ?? [];
+            const isPublished = designProducts.some((p) => p.is_published);
+            const thumbnail = coverByDesignId.get(design.id) ?? design.image_url;
+            const prices = designProducts.map((p) => p.base_price_cop);
+            const minPrice = prices.length > 0 ? Math.min(...prices) : null;
 
-                return (
-                  <tr
-                    key={design.id}
-                    className="border-b border-neutral-100 last:border-0 align-top"
+            return (
+              <div
+                key={design.id}
+                className="rounded-xl border border-neutral-200 bg-white overflow-hidden flex flex-col"
+              >
+                <div className="relative aspect-square bg-neutral-100">
+                  {thumbnail ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={thumbnail} alt={design.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-neutral-400">
+                      Sin foto
+                    </div>
+                  )}
+                  <span
+                    className={`absolute top-2 left-2 rounded-full text-xs font-semibold px-2 py-1 ${
+                      isPublished ? "bg-green-100 text-green-700" : "bg-white/90 text-neutral-500"
+                    }`}
                   >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {thumbnail ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={thumbnail}
-                            alt={design.name}
-                            className="w-10 h-10 rounded-lg object-cover border border-neutral-200 flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-neutral-100 flex-shrink-0" />
-                        )}
-                        <div className="min-w-0">
-                          <div className="font-medium">{design.name}</div>
-                          {design.notes && (
-                            <div className="text-xs text-neutral-500 truncate max-w-[220px]">
-                              {design.notes}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600">
+                    {isPublished ? "En la página" : "Oculto"}
+                  </span>
+                </div>
+
+                <div className="p-4 flex flex-col gap-2 flex-1">
+                  <div>
+                    <p className="font-semibold leading-tight">{design.name}</p>
+                    <p className="text-xs text-neutral-500">
                       {TECHNIQUE_LABELS[design.technique] ?? design.technique}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-block rounded-full text-xs font-medium px-2 py-1 ${
-                          STATUS_STYLES[design.status] ??
-                          "bg-neutral-100 text-neutral-600"
-                        }`}
+                      {minPrice !== null && ` · desde ${currencyFormatter.format(minPrice)}`}
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-neutral-600">
+                    {designProducts.length > 0
+                      ? designProducts
+                          .map((p) => PRESENTATION_LABELS[p.garment_type] ?? p.garment_type)
+                          .join(" · ")
+                      : "Sin prendas todavía"}
+                  </p>
+
+                  <div className="mt-auto pt-2 flex flex-col gap-1.5">
+                    {designProducts.length > 0 && (
+                      <form action={cambiarPublicacionDiseno}>
+                        <input type="hidden" name="id" value={design.id} />
+                        <input type="hidden" name="publish" value={isPublished ? "false" : "true"} />
+                        <button
+                          type="submit"
+                          className={`w-full text-xs font-semibold rounded-lg px-2 py-1.5 ${
+                            isPublished
+                              ? "border border-neutral-300 text-neutral-600 hover:border-ricamo-red hover:text-ricamo-red"
+                              : "bg-ricamo-yellow text-ricamo-black"
+                          }`}
+                        >
+                          {isPublished ? "Ocultar de la página" : "Publicar en la página"}
+                        </button>
+                      </form>
+                    )}
+                    <div className="flex gap-1.5">
+                      <Link
+                        href={`/disenos/${design.id}/editar`}
+                        className="flex-1 text-xs text-center rounded-lg px-2 py-1.5 border border-neutral-300 text-neutral-700 hover:border-ricamo-black"
                       >
-                        {STATUS_LABELS[design.status] ?? design.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {!product ? (
-                        <span className="inline-block rounded-full bg-neutral-100 text-neutral-500 text-xs font-medium px-2 py-1">
-                          Sin producto
-                        </span>
-                      ) : product.is_published ? (
-                        <span className="inline-block rounded-full bg-green-100 text-green-700 text-xs font-medium px-2 py-1">
-                          Publicado
-                        </span>
-                      ) : (
-                        <span className="inline-block rounded-full bg-neutral-100 text-neutral-500 text-xs font-medium px-2 py-1">
-                          No publicado
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600">
-                      {customer?.full_name ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
-                      {dateFormatter.format(new Date(design.created_at))}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1.5 min-w-[170px]">
-                        {forward && (
-                          <form action={updateDesignStatus}>
-                            <input type="hidden" name="id" value={design.id} />
-                            <input
-                              type="hidden"
-                              name="status"
-                              value={forward.status}
-                            />
-                            <button
-                              type="submit"
-                              className="w-full text-xs font-semibold rounded-lg px-2 py-1.5 bg-ricamo-yellow text-ricamo-black"
-                            >
-                              {forward.label}
-                            </button>
-                          </form>
-                        )}
-
-                        {design.status === "enviado_aprobacion" && (
-                          <form action={updateDesignStatus}>
-                            <input type="hidden" name="id" value={design.id} />
-                            <input
-                              type="hidden"
-                              name="status"
-                              value="borrador"
-                            />
-                            <button
-                              type="submit"
-                              className="w-full text-xs rounded-lg px-2 py-1.5 border border-neutral-300 text-neutral-600"
-                            >
-                              Regresar a borrador
-                            </button>
-                          </form>
-                        )}
-
-                        {design.status !== "archivado" &&
-                          forward?.status !== "archivado" && (
-                            <form action={updateDesignStatus}>
-                              <input
-                                type="hidden"
-                                name="id"
-                                value={design.id}
-                              />
-                              <input
-                                type="hidden"
-                                name="status"
-                                value="archivado"
-                              />
-                              <button
-                                type="submit"
-                                className="w-full text-xs rounded-lg px-2 py-1.5 border border-neutral-300 text-neutral-600 hover:border-ricamo-red hover:text-ricamo-red"
-                              >
-                                Archivar
-                              </button>
-                            </form>
-                          )}
-
-                        {design.status === "archivado" && (
-                          <form action={updateDesignStatus}>
-                            <input type="hidden" name="id" value={design.id} />
-                            <input
-                              type="hidden"
-                              name="status"
-                              value="borrador"
-                            />
-                            <button
-                              type="submit"
-                              className="w-full text-xs rounded-lg px-2 py-1.5 border border-neutral-300 text-neutral-600"
-                            >
-                              Reactivar a borrador
-                            </button>
-                          </form>
-                        )}
-
-                        <Link
-                          href={`/disenos/${design.id}/catalogo`}
-                          className="w-full text-xs text-center rounded-lg px-2 py-1.5 border border-ricamo-black text-ricamo-black hover:bg-ricamo-black hover:text-white"
-                        >
-                          Gestionar catálogo
-                        </Link>
-
-                        <Link
-                          href={`/disenos/${design.id}/editar`}
-                          className="text-xs text-center text-neutral-500 hover:text-ricamo-black underline underline-offset-2 mt-0.5"
-                        >
-                          Editar
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                        Editar
+                      </Link>
+                      <Link
+                        href={`/disenos/${design.id}/catalogo`}
+                        className="flex-1 text-xs text-center rounded-lg px-2 py-1.5 border border-neutral-300 text-neutral-700 hover:border-ricamo-black"
+                      >
+                        Prendas y tallas
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </main>
   );
 }
