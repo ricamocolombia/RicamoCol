@@ -82,15 +82,26 @@ export async function registrarPagoProveedor(formData: FormData) {
 
   const supabase = createServiceRoleClient();
 
-  const { error: updateError } = await supabase
+  // Solo marca las que siguen sin pagar: un doble clic o una pestana vieja
+  // no debe registrar una segunda salida en Bancos por deudas ya pagadas.
+  const { data: marked, error: updateError } = await supabase
     .from("accounts_payable")
     .update({ status: "pagado" })
-    .in("id", selectedIds);
+    .in("id", selectedIds)
+    .in("status", ["pendiente", "vencido"])
+    .select("id");
 
   if (updateError) {
     redirect(
       `/cuentas-por-pagar?error=${encodeURIComponent(
         "No se pudo marcar como pagadas: " + updateError.message
+      )}`
+    );
+  }
+  if (!marked || marked.length === 0) {
+    redirect(
+      `/cuentas-por-pagar?error=${encodeURIComponent(
+        "Esas cuentas ya estaban pagadas — no se registró ninguna salida nueva"
       )}`
     );
   }
@@ -100,7 +111,7 @@ export async function registrarPagoProveedor(formData: FormData) {
     type: "salida",
     category: "Pago a proveedor",
     amount_cop: amount,
-    description: `Pago a ${supplierLabel} — ${selectedIds.length} cuenta(s) por pagar`,
+    description: `Pago a ${supplierLabel} — ${marked.length} cuenta(s) por pagar`,
   });
 
   if (transactionError) {

@@ -32,6 +32,12 @@ interface SiblingProductRow {
   garment_type: string;
 }
 
+const SIZE_ORDER = ["2", "4", "6", "8", "10", "12", "14", "16", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+function sizeRank(size: string): number {
+  const index = SIZE_ORDER.indexOf(size.trim().toUpperCase());
+  return index === -1 ? SIZE_ORDER.length : index;
+}
+
 export default async function ProductoPage({
   params,
 }: {
@@ -58,8 +64,7 @@ export default async function ProductoPage({
       supabase
         .from("product_variants")
         .select("id, size, color, price_cop")
-        .eq("product_id", product.id)
-        .order("size", { ascending: true }),
+        .eq("product_id", product.id),
       product.design_id
         ? supabase
             .from("design_images")
@@ -87,11 +92,16 @@ export default async function ProductoPage({
   const [mainImageUrl, ...restImages] = images;
   const siblings = (siblingsData ?? []) as unknown as SiblingProductRow[];
 
+  // Orden de tallas natural (ninos 4..16, luego S..XXL), no alfabetico.
+  variants.sort((a, b) => sizeRank(a.size) - sizeRank(b.size) || a.size.localeCompare(b.size, "es"));
+  const prices = variants.map((v) => v.price_cop);
+  const minPrice = prices.length > 0 ? Math.min(...prices) : product.base_price_cop;
+  const pricesVary = prices.some((p) => p !== prices[0]);
   const sizes = [...new Set(variants.map((v) => v.size))];
   const colors = [...new Set(variants.map((v) => v.color).filter((c): c is string => Boolean(c)))];
 
   const whatsappMessage = [
-    `Hola! Me interesa "${product.name}" ($${currencyFormatter.format(product.base_price_cop)}) del catálogo de Ricamo.`,
+    `Hola! Me interesa "${product.name}" (${pricesVary ? "desde " : ""}${currencyFormatter.format(minPrice)}) del catálogo de Ricamo.`,
     sizes.length > 0 ? `Tallas disponibles: ${sizes.join(", ")}.` : null,
     "¿Me ayudas con el pedido?",
   ]
@@ -164,7 +174,8 @@ export default async function ProductoPage({
 
           <h1 className="font-display text-3xl sm:text-4xl mb-3">{product.name}</h1>
           <p className="text-2xl font-bold mb-6">
-            {currencyFormatter.format(product.base_price_cop)}
+            {pricesVary && <span className="text-base font-semibold text-ricamo-black/60">Desde </span>}
+            {currencyFormatter.format(minPrice)}
           </p>
 
           {product.description && (
@@ -182,6 +193,11 @@ export default async function ProductoPage({
                     className="min-w-11 h-11 px-3 flex items-center justify-center rounded-full border border-black/15 text-sm font-semibold hover:border-ricamo-red hover:text-ricamo-red transition-colors"
                   >
                     {variant.size}
+                    {pricesVary && (
+                      <span className="ml-1.5 text-xs font-normal text-ricamo-black/60">
+                        {currencyFormatter.format(variant.price_cop)}
+                      </span>
+                    )}
                   </Link>
                 ))}
               </div>

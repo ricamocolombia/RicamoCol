@@ -15,6 +15,13 @@ Lista viva. Al iniciar una sesión, revisar esta nota. Al cerrar una sesión, mo
 - [ ] **QR y datos de la cuenta bancaria real de Maria Jose** (imagen del QR + banco/tipo de cuenta/número/titular) — sin esto, el checkout nuevo de `/catalogo/[slug]/comprar` (2026-09-08) solo le dice al cliente que escriba por WhatsApp en vez de mostrarle cómo pagar. Se configura en `/configuracion` → "Pago por transferencia", sin tocar código.
 
 ## Backend / datos
+- [x] `supabase/migrations/0014_precios_prenda_estampado.sql` aplicada por el usuario y verificada en vivo (2026-10-27) — `garment_presentation_prices` con los 4 precios de estampado.
+- [ ] Decidir a qué presentación nueva (Camiseta Regular/Oversize, Buzo Cuello Redondo/Capucha) mapear los productos viejos con `garment_type` `camiseta`/`buzo` (hoy "Me vale mondá" publicado es `camiseta`) — si no, conviven ambos nombres en los filtros de la web.
+- [ ] Cambiar el precio de estampado en `/configuracion` no actualiza listados/tallas ya creados (solo aplica a los nuevos) — decidir si debe propagarse.
+- [ ] Ventas/compras manuales: si un insert falla a mitad (item, cuenta por pagar, transacción) queda el pedido a medias y el reintento duplica — mover a una función de Postgres (RPC) transaccional. Auditoría 2026-10-27.
+- [ ] Consultas del Dashboard/CRM/campañas sin paginación: el tope de 1000 filas por defecto de Supabase subcontará en silencio cuando los datos crezcan.
+- [ ] `crearVenta` registra ingreso aunque el estado de pago sea "reembolsado"; "Marcar pagada" en cuentas por cobrar no registra el ingreso en Bancos; compras en `pendiente` no tienen acción de "marcar recibida" (su stock nunca entra a inventario).
+- [ ] Campos de dinero `type=number`: si alguien escribe "65.000" (separador de miles) puede guardarse como 65 — revisar con el negocio si pasa en la práctica.
 - [x] `pnpm install` ejecutado y `pnpm build` verificado en ambas apps (2026-08-27) — compilan sin errores con las credenciales reales de Supabase.
 - [x] Migración `supabase/migrations/0001_init.sql` aplicada al proyecto real (2026-08-27) — el usuario la pegó directamente en el SQL Editor del Dashboard de Supabase.
 - [x] Tipos TypeScript reales escritos a mano en `packages/supabase/src/types.ts` (2026-08-27), a partir del `.sql` — reemplaza el placeholder `Record<string, unknown>`. Sin CLI todavía, pero ya tipa correctamente todos los `.insert()`/`.update()`/`.select()` del admin. Si más adelante se consigue el access token de Supabase, se puede regenerar con el CLI y comparar contra este archivo.

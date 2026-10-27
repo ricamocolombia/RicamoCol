@@ -27,10 +27,9 @@ export default async function NuevaTransaccionPage({
 
   const accounts = (data ?? []) as unknown as BankAccount[];
 
-  const now = new Date();
-  const localDatetime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
+  // Hora actual de Colombia (UTC-5, sin horario de verano) -- el servidor en
+  // Vercel corre en UTC, getTimezoneOffset() ahi es 0.
+  const localDatetime = new Date(Date.now() - 5 * 60 * 60000).toISOString().slice(0, 16);
 
   return (
     <main className="px-6 py-10 max-w-lg">

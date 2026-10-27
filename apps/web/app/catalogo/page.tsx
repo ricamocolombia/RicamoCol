@@ -137,7 +137,7 @@ export default async function CatalogoPage({
                 : "border-black/15 hover:border-ricamo-black"
             }`}
           >
-            {GARMENT_LABELS[g]}
+            {GARMENT_LABELS[g] ?? g}
           </Link>
         ))}
       </div>

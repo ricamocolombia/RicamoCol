@@ -1,7 +1,7 @@
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 
 const BUCKET = "design-images";
-const MAX_SIZE_BYTES = 8 * 1024 * 1024;
+const MAX_SIZE_BYTES = 4 * 1024 * 1024;
 
 export class ImageUploadError extends Error {}
 
@@ -18,7 +18,7 @@ export async function uploadDesignImage(
     throw new ImageUploadError("El archivo debe ser una imagen");
   }
   if (file.size > MAX_SIZE_BYTES) {
-    throw new ImageUploadError("La imagen no puede pesar más de 8MB");
+    throw new ImageUploadError("La imagen no puede pesar más de 4MB");
   }
 
   const supabase = createServiceRoleClient();

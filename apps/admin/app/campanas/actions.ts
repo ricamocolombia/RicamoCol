@@ -134,22 +134,42 @@ export async function enviarCampana(formData: FormData) {
     );
   }
 
-  const resend = new Resend(apiKey);
+  // Reclama la campaña antes de enviar (update condicional): un doble clic
+  // o dos pestanas no la mandan dos veces -- solo una la encuentra todavia
+  // en borrador.
+  const { data: claimed } = await supabase
+    .from("marketing_campaigns")
+    .update({ status: "enviada", sent_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "borrador")
+    .select("id");
 
+  if (!claimed || claimed.length === 0) {
+    redirect(`/campanas?error=${encodeURIComponent("Esta campaña ya fue enviada")}`);
+  }
+
+  const resend = new Resend(apiKey);
+  const emails = recipients
+    .filter((r): r is typeof r & { email: string } => Boolean(r.email))
+    .map((r) => ({ from: fromEmail, to: r.email, subject: campaign.subject, text: campaign.body }));
+
+  // API de lotes de Resend (hasta 100 correos por llamada): evita el limite
+  // de ~2 solicitudes/segundo que hacia fallar el envio uno a uno. Resend
+  // devuelve { error } en vez de lanzar, asi que se revisa explicitamente.
+  const BATCH_SIZE = 100;
   let sent = 0;
-  for (const recipient of recipients) {
-    if (!recipient.email) continue;
+  let lastError: string | null = null;
+  for (let i = 0; i < emails.length; i += BATCH_SIZE) {
+    const chunk = emails.slice(i, i + BATCH_SIZE);
     try {
-      await resend.emails.send({
-        from: fromEmail,
-        to: recipient.email,
-        subject: campaign.subject,
-        text: campaign.body,
-      });
-      sent += 1;
-    } catch {
-      // Un fallo individual no debe tumbar el envio completo; sigue con el
-      // resto y al final se guarda cuantos se lograron enviar.
+      const { error } = await resend.batch.send(chunk);
+      if (error) {
+        lastError = error.message;
+      } else {
+        sent += chunk.length;
+      }
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
     }
   }
 
@@ -157,7 +177,6 @@ export async function enviarCampana(formData: FormData) {
     .from("marketing_campaigns")
     .update({
       status: sent > 0 ? "enviada" : "fallida",
-      sent_at: new Date().toISOString(),
       recipients_count: sent,
     })
     .eq("id", id);
@@ -167,6 +186,14 @@ export async function enviarCampana(formData: FormData) {
       `/campanas?error=${encodeURIComponent(
         "La campaña se envió pero no se pudo actualizar su estado: " +
           updateError.message
+      )}`
+    );
+  }
+
+  if (lastError) {
+    redirect(
+      `/campanas?error=${encodeURIComponent(
+        `Se enviaron ${sent} de ${emails.length} correos. Error de Resend: ${lastError}`
       )}`
     );
   }

@@ -97,6 +97,9 @@ export async function crearTransaccion(formData: FormData) {
     );
   }
 
+  if (occurredAtRaw && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(occurredAtRaw)) {
+    redirect(`/bancos/nueva-transaccion?error=${encodeURIComponent("Fecha inválida")}`);
+  }
   if (referencePurchaseId && !UUID_RE.test(referencePurchaseId)) {
     redirect(
       `/bancos/nueva-transaccion?error=${encodeURIComponent("El id de la compra debe ser un UUID valido")}`
@@ -111,7 +114,11 @@ export async function crearTransaccion(formData: FormData) {
     category,
     amount_cop: Math.round(amount),
     description: description || null,
-    occurred_at: occurredAtRaw ? new Date(occurredAtRaw).toISOString() : new Date().toISOString(),
+    // El datetime-local llega sin zona ("2026-10-27T20:30"): es hora de
+    // Colombia, no la del servidor (UTC en Vercel).
+    occurred_at: occurredAtRaw
+      ? new Date(`${occurredAtRaw.slice(0, 16)}:00-05:00`).toISOString()
+      : new Date().toISOString(),
     reference_order_id: referenceOrderId || null,
     reference_purchase_id: referencePurchaseId || null,
   });

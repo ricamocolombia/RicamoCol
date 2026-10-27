@@ -140,7 +140,7 @@ export default async function NuevaCuentaPorCobrarPage({
                   : undefined;
                 return (
                   <option key={order.id} value={order.id}>
-                    {new Date(order.created_at).toLocaleDateString("es-CO")} —{" "}
+                    {new Date(order.created_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })} —{" "}
                     {customer?.full_name ?? "Sin cliente"} —{" "}
                     {currencyFormatter.format(order.total_cop)}
                   </option>

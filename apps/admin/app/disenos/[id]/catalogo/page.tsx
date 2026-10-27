@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 import {
-  crearListadoDesdeDiseno,
+  agregarPresentaciones,
   agregarTalla,
   eliminarTalla,
   actualizarListadoCatalogo,
@@ -72,15 +72,46 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-const GARMENT_TYPE_SEED = ["camiseta", "buzo", "tank top"];
 const SIZE_SEED = ["4", "6", "8", "10", "12", "14", "16", "S", "M", "L", "XL", "XXL"];
 
-function mergeSuggestions(seed: string[], used: (string | null)[]): string[] {
-  const set = new Set(seed);
-  for (const value of used) {
-    if (value) set.add(value);
-  }
-  return [...set].sort((a, b) => a.localeCompare(b, "es"));
+// Catalogo fijo de presentaciones (prenda + corte). En estampado el precio
+// es fijo por presentacion (garment_presentation_prices, editable en
+// /configuracion); en bordado el precio varia por diseño y se escribe a
+// mano. Duplicado en actions.ts (esa copia valida lo que llega del form).
+const PRESENTATIONS = [
+  {
+    key: "camiseta regular",
+    label: "Camiseta Regular",
+    techniques: ["bordado", "estampado"],
+    estampadoPriceKey: "estampado_camiseta_regular",
+  },
+  {
+    key: "camiseta oversize",
+    label: "Camiseta Oversize",
+    techniques: ["bordado", "estampado"],
+    estampadoPriceKey: "estampado_camiseta_oversize",
+  },
+  {
+    key: "buzo cuello redondo",
+    label: "Buzo Cuello Redondo",
+    techniques: ["bordado", "estampado"],
+    estampadoPriceKey: "estampado_buzo_cuello_redondo",
+  },
+  {
+    key: "buzo capucha",
+    label: "Buzo Capucha",
+    techniques: ["bordado", "estampado"],
+    estampadoPriceKey: "estampado_buzo_capucha",
+  },
+  { key: "tank top", label: "Tank top", techniques: ["bordado"], estampadoPriceKey: null },
+] as const;
+
+const PRESENTATION_LABELS: Record<string, string> = Object.fromEntries(
+  PRESENTATIONS.map((p) => [p.key, p.label])
+);
+
+function priceFieldName(key: string): string {
+  return `price__${key.replace(/\s+/g, "_")}`;
 }
 
 export default async function DisenoCatalogoPage({
@@ -109,9 +140,9 @@ export default async function DisenoCatalogoPage({
   const [
     { data: productsData, error: productsError },
     { data: imagesData },
-    { data: allGarmentTypesData },
     { data: collectionsData },
     { data: giftSegmentsData },
+    { data: presentationPricesData },
   ] = await Promise.all([
     supabase
       .from("products")
@@ -124,20 +155,26 @@ export default async function DisenoCatalogoPage({
       .from("design_images")
       .select("design_id, image_url, is_cover")
       .eq("design_id", designId),
-    supabase.from("products").select("garment_type"),
     supabase.from("collections").select("id, name").order("name", { ascending: true }),
     supabase
       .from("gift_segments")
       .select("id, name")
       .eq("is_active", true)
       .order("sort_order", { ascending: true }),
+    supabase.from("garment_presentation_prices").select("presentation, cost_cop"),
   ]);
 
   const products = (productsData ?? []) as unknown as ProductRow[];
   const images = (imagesData ?? []) as unknown as DesignImageRow[];
-  const allGarmentTypes = (allGarmentTypesData ?? []) as unknown as { garment_type: string }[];
   const collections = (collectionsData ?? []) as unknown as CollectionRow[];
   const giftSegments = (giftSegmentsData ?? []) as unknown as GiftSegmentRow[];
+  const presentationPrices = (presentationPricesData ?? []) as unknown as {
+    presentation: string;
+    cost_cop: number | null;
+  }[];
+  const presentationPriceByKey = new Map(
+    presentationPrices.map((p) => [p.presentation, p.cost_cop])
+  );
 
   const productIds = products.map((p) => p.id);
 
@@ -177,9 +214,11 @@ export default async function DisenoCatalogoPage({
   const cover =
     images.find((img) => img.is_cover)?.image_url ?? images[0]?.image_url ?? design.image_url;
 
-  const garmentTypeSuggestions = mergeSuggestions(
-    GARMENT_TYPE_SEED,
-    allGarmentTypes.map((p) => p.garment_type)
+  const existingGarmentTypes = new Set(products.map((p) => p.garment_type));
+  const availablePresentations = PRESENTATIONS.filter(
+    (p) =>
+      (p.techniques as readonly string[]).includes(design.technique) &&
+      !existingGarmentTypes.has(p.key)
   );
 
   return (
@@ -228,7 +267,9 @@ export default async function DisenoCatalogoPage({
             <div key={product.id} className="rounded-xl border border-neutral-200 bg-white p-5">
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <div>
-                  <h2 className="font-semibold text-lg">{product.garment_type}</h2>
+                  <h2 className="font-semibold text-lg">
+                    {PRESENTATION_LABELS[product.garment_type] ?? product.garment_type}
+                  </h2>
                   <p className="text-xs text-neutral-400">
                     {product.name} · /{product.slug} · {currencyFormatter.format(product.base_price_cop)}
                   </p>
@@ -400,52 +441,63 @@ export default async function DisenoCatalogoPage({
           );
         })}
 
-        <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5">
-          <p className="text-xs font-medium text-neutral-500 mb-2">+ Agregar tipo de prenda</p>
-          <form action={crearListadoDesdeDiseno} className="flex items-end gap-3 flex-wrap">
-            <input type="hidden" name="design_id" value={designId} />
-            <div>
-              <label className="block text-xs text-neutral-500 mb-1">Tipo de prenda</label>
-              <input
-                name="garment_type"
-                list="garment-type-suggestions"
-                required
-                className="rounded-lg border border-neutral-300 px-2 py-1.5 text-sm w-40"
-              />
-              <datalist id="garment-type-suggestions">
-                {garmentTypeSuggestions.map((type) => (
-                  <option key={type} value={type} />
-                ))}
-              </datalist>
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-500 mb-1">Nombre del producto</label>
-              <input
-                name="name"
-                defaultValue={design.name}
-                required
-                className="rounded-lg border border-neutral-300 px-2 py-1.5 text-sm w-56"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-500 mb-1">Precio base</label>
-              <input
-                type="number"
-                name="base_price_cop"
-                min={0}
-                step={1}
-                required
-                className="rounded-lg border border-neutral-300 px-2 py-1.5 text-sm w-32"
-              />
-            </div>
-            <button
-              type="submit"
-              className="text-xs font-semibold text-white bg-ricamo-black rounded-lg px-3 py-1.5 whitespace-nowrap"
-            >
-              Crear listado
-            </button>
-          </form>
-        </div>
+        {availablePresentations.length > 0 && (
+          <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5">
+            <p className="text-xs font-medium text-neutral-500 mb-1">+ Agregar prenda</p>
+            <p className="text-xs text-neutral-400 mb-3">
+              {design.technique === "estampado"
+                ? "Precio fijo por presentación, configurable en Configuración."
+                : "El precio de bordado varía por diseño — escríbelo para cada prenda que marques."}
+            </p>
+            <form action={agregarPresentaciones} className="space-y-2">
+              <input type="hidden" name="design_id" value={designId} />
+              {availablePresentations.map((presentation) => {
+                const inputId = `presentation-${presentation.key.replace(/\s+/g, "-")}`;
+                const estampadoPrice =
+                  design.technique === "estampado"
+                    ? presentationPriceByKey.get(presentation.estampadoPriceKey ?? "")
+                    : undefined;
+
+                return (
+                  <div key={presentation.key} className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id={inputId}
+                      name="presentation_keys"
+                      value={presentation.key}
+                      className="rounded border-neutral-300"
+                    />
+                    <label htmlFor={inputId} className="text-sm flex-1">
+                      {presentation.label}
+                    </label>
+                    {design.technique === "estampado" ? (
+                      <span className="text-sm text-neutral-500 w-28 text-right">
+                        {estampadoPrice != null
+                          ? currencyFormatter.format(estampadoPrice)
+                          : "Sin definir"}
+                      </span>
+                    ) : (
+                      <input
+                        type="number"
+                        name={priceFieldName(presentation.key)}
+                        min={0}
+                        step={1}
+                        placeholder="Precio"
+                        className="rounded-lg border border-neutral-300 px-2 py-1.5 text-sm w-28"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+              <button
+                type="submit"
+                className="text-xs font-semibold text-white bg-ricamo-black rounded-lg px-3 py-1.5 whitespace-nowrap mt-2"
+              >
+                Agregar prenda(s) seleccionada(s)
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </main>
   );

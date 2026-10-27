@@ -62,6 +62,45 @@ export async function actualizarEmailAlertas(formData: FormData) {
   redirect("/configuracion");
 }
 
+const VALID_GARMENT_PRESENTATIONS = [
+  "estampado_camiseta_regular",
+  "estampado_camiseta_oversize",
+  "estampado_buzo_cuello_redondo",
+  "estampado_buzo_capucha",
+] as const;
+type GarmentPresentation = (typeof VALID_GARMENT_PRESENTATIONS)[number];
+function isGarmentPresentation(value: string): value is GarmentPresentation {
+  return (VALID_GARMENT_PRESENTATIONS as readonly string[]).includes(value);
+}
+
+export async function actualizarPrecioPresentacion(formData: FormData) {
+  const presentationRaw = String(formData.get("presentation") ?? "").trim();
+  const costRaw = String(formData.get("cost_cop") ?? "").trim();
+
+  if (!isGarmentPresentation(presentationRaw)) {
+    redirect(`/configuracion?error=${encodeURIComponent("Presentación inválida")}`);
+  }
+  const presentation: GarmentPresentation = presentationRaw;
+
+  const cost = costRaw ? Number.parseInt(costRaw, 10) : null;
+  if (cost !== null && (!Number.isFinite(cost) || cost < 0)) {
+    redirect(`/configuracion?error=${encodeURIComponent("El precio debe ser un número válido")}`);
+  }
+
+  const supabase = createServiceRoleClient();
+
+  const { error } = await supabase
+    .from("garment_presentation_prices")
+    .update({ cost_cop: cost })
+    .eq("presentation", presentation);
+
+  if (error) {
+    redirect(`/configuracion?error=${encodeURIComponent("No se pudo actualizar: " + error.message)}`);
+  }
+
+  redirect("/configuracion");
+}
+
 export async function actualizarPagoTransferencia(formData: FormData) {
   const currentQrImageUrl = String(formData.get("current_qr_image_url") ?? "").trim();
   const bankAccountInfo = String(formData.get("bank_account_info") ?? "").trim();

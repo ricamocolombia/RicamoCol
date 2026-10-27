@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 import { uploadPaymentProof, PaymentProofUploadError } from "../../../../lib/paymentProof";
 import { sendOrderStatusEmail } from "../../../../lib/orderEmails";
+import { findOrCreateCustomer } from "../../../../lib/customers";
+
+const MAX_QUANTITY = 20;
 
 function fail(slug: string, variantId: string, message: string): never {
   redirect(
@@ -68,34 +71,19 @@ export async function crearPedidoConComprobante(formData: FormData) {
   if (!Number.isFinite(quantity) || quantity < 1) {
     fail(product.slug, variantId, "La cantidad debe ser un número mayor a 0");
   }
+  if (quantity > MAX_QUANTITY) {
+    fail(
+      product.slug,
+      variantId,
+      `Para más de ${MAX_QUANTITY} unidades escríbenos por WhatsApp y te armamos el pedido`
+    );
+  }
 
-  // Cliente: busca por telefono, o crea uno nuevo -- mismo patron que
-  // apps/web/app/personalizados/actions.ts.
-  const { data: existingCustomer } = await supabase
-    .from("customers")
-    .select("id")
-    .eq("phone", phone)
-    .maybeSingle();
-
-  let customerId = existingCustomer?.id ?? null;
-
+  // Cliente: busca por telefono (normalizado), o crea uno nuevo -- mismo
+  // helper que apps/web/app/personalizados/actions.ts.
+  const customerId = await findOrCreateCustomer(supabase, { name, phone, email, city, address });
   if (!customerId) {
-    const { data: newCustomer, error: customerError } = await supabase
-      .from("customers")
-      .insert({
-        full_name: name,
-        phone,
-        email: email || null,
-        city: city || null,
-        address: address || null,
-      })
-      .select("id")
-      .single();
-
-    if (customerError || !newCustomer) {
-      fail(product.slug, variantId, "No pudimos guardar tus datos, intenta de nuevo");
-    }
-    customerId = newCustomer.id;
+    fail(product.slug, variantId, "No pudimos guardar tus datos, intenta de nuevo");
   }
 
   const totalCop = variant.price_cop * quantity;
@@ -122,10 +110,17 @@ export async function crearPedidoConComprobante(formData: FormData) {
     payment_status: "comprobante_pendiente",
     payment_proof_path: paymentProofPath,
     payment_proof_uploaded_at: new Date().toISOString(),
+    // La direccion de envio va en el pedido: si el cliente ya existia, su
+    // ficha conserva la direccion vieja (ver lib/customers.ts).
+    notes: [address && `Envío a: ${address}`, city && `Ciudad: ${city}`, email && `Correo: ${email}`]
+      .filter(Boolean)
+      .join(" · ") || null,
   });
 
   if (orderError) {
-    fail(product.slug, variantId, "No se pudo registrar el pedido: " + orderError.message);
+    console.error("checkout: insert orders", orderError);
+    await supabase.storage.from("payment-proofs").remove([paymentProofPath]);
+    fail(product.slug, variantId, "No pudimos registrar el pedido, intenta de nuevo");
   }
 
   const { error: itemError } = await supabase.from("order_items").insert({
@@ -141,11 +136,12 @@ export async function crearPedidoConComprobante(formData: FormData) {
   });
 
   if (itemError) {
-    fail(
-      product.slug,
-      variantId,
-      "El pedido se registró pero no se pudo guardar el detalle: " + itemError.message
-    );
+    // Deshace el pedido a medias para que el reintento del cliente no deje
+    // un pedido duplicado sin items en el admin.
+    console.error("checkout: insert order_items", itemError);
+    await supabase.from("orders").delete().eq("id", orderId);
+    await supabase.storage.from("payment-proofs").remove([paymentProofPath]);
+    fail(product.slug, variantId, "No pudimos registrar el pedido, intenta de nuevo");
   }
 
   await sendOrderStatusEmail(orderId, "comprobante_recibido");

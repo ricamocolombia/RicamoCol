@@ -72,7 +72,9 @@ export default async function EditarVentaPage({
             className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
           >
             <option value="pendiente">Pendiente</option>
-            <option value="comprobante_pendiente">Comprobante por validar</option>
+            {order.payment_status === "comprobante_pendiente" && (
+              <option value="comprobante_pendiente">Comprobante por validar</option>
+            )}
             <option value="anticipo_pagado">Anticipo pagado</option>
             <option value="pagado">Pagado</option>
             <option value="reembolsado">Reembolsado</option>

@@ -1,7 +1,7 @@
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 
 const BUCKET = "payment-proofs";
-const MAX_SIZE_BYTES = 8 * 1024 * 1024;
+const MAX_SIZE_BYTES = 4 * 1024 * 1024;
 
 export class PaymentProofUploadError extends Error {}
 
@@ -13,7 +13,7 @@ export async function uploadPaymentProof(file: File, orderId: string): Promise<s
     throw new PaymentProofUploadError("El comprobante debe ser una imagen");
   }
   if (file.size > MAX_SIZE_BYTES) {
-    throw new PaymentProofUploadError("La imagen no puede pesar más de 8MB");
+    throw new PaymentProofUploadError("La imagen no puede pesar más de 4MB");
   }
 
   const supabase = createServiceRoleClient();

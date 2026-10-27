@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { shrinkInputFiles } from "../lib/shrinkImage";
 
 // Cajon de carga de imagenes con vista previa local (solo JS de cliente para
 // la previsualizacion y el estado de "arrastrando"). El envio real sigue
@@ -31,6 +32,12 @@ export function ImageDropzone({
     setPreviews(urls);
   }
 
+  // Las fotos pesadas se reducen antes de enviarse: el <form> tiene un tope
+  // de 4MB por envio (next.config.mjs).
+  async function handleFiles(input: HTMLInputElement, files: FileList) {
+    updatePreviews(await shrinkInputFiles(input, files));
+  }
+
   return (
     <div>
       <label
@@ -44,8 +51,7 @@ export function ImageDropzone({
           e.preventDefault();
           setDragOver(false);
           if (inputRef.current && e.dataTransfer.files.length > 0) {
-            inputRef.current.files = e.dataTransfer.files;
-            updatePreviews(e.dataTransfer.files);
+            void handleFiles(inputRef.current, e.dataTransfer.files);
           }
         }}
         className={`flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-8 text-center cursor-pointer transition-colors ${
@@ -68,7 +74,7 @@ export function ImageDropzone({
           <path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16" />
         </svg>
         <p className="text-sm font-medium text-neutral-600">{label}</p>
-        <p className="text-xs text-neutral-400">PNG o JPG, hasta 8MB{multiple ? " cada una" : ""}</p>
+        <p className="text-xs text-neutral-400">PNG o JPG{multiple ? " — máximo 4MB en total por envío" : ", hasta 4MB"}</p>
         <input
           ref={inputRef}
           id={inputId}
@@ -76,7 +82,13 @@ export function ImageDropzone({
           type="file"
           accept="image/*"
           multiple={multiple}
-          onChange={(e) => updatePreviews(e.target.files)}
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              void handleFiles(e.target, e.target.files);
+            } else {
+              updatePreviews(null);
+            }
+          }}
           className="sr-only"
         />
       </label>

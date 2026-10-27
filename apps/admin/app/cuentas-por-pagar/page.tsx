@@ -39,7 +39,9 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-const dateFormatter = new Intl.DateTimeFormat("es-CO", { dateStyle: "medium" });
+// due_date es columna date ("YYYY-MM-DD"): new Date() la lee como medianoche
+// UTC, asi que se formatea en UTC para no mostrar el dia anterior.
+const dateFormatter = new Intl.DateTimeFormat("es-CO", { timeZone: "UTC", dateStyle: "medium" });
 
 function isOverdue(row: AccountPayable): boolean {
   if (row.status === "pagado" || row.status === "anulado") return false;

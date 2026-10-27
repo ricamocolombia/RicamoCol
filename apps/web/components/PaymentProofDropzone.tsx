@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { shrinkInputFiles } from "../lib/shrinkImage";
 
 // Cajon de carga del comprobante de pago, mismo patron que
 // apps/admin/components/ImageDropzone.tsx (vista previa solo con JS de
@@ -21,6 +22,12 @@ export function PaymentProofDropzone({ name }: { name: string }) {
     setPreview(URL.createObjectURL(file));
   }
 
+  // Las fotos de celular suelen pasar el tope de 4MB del envio
+  // (next.config.mjs): se reducen aqui antes de que el <form> las mande.
+  async function handleFiles(input: HTMLInputElement, files: FileList) {
+    updatePreview(await shrinkInputFiles(input, files));
+  }
+
   return (
     <div>
       <label
@@ -34,8 +41,7 @@ export function PaymentProofDropzone({ name }: { name: string }) {
           e.preventDefault();
           setDragOver(false);
           if (inputRef.current && e.dataTransfer.files.length > 0) {
-            inputRef.current.files = e.dataTransfer.files;
-            updatePreview(e.dataTransfer.files);
+            void handleFiles(inputRef.current, e.dataTransfer.files);
           }
         }}
         className={`flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-8 text-center cursor-pointer transition-colors ${
@@ -58,7 +64,7 @@ export function PaymentProofDropzone({ name }: { name: string }) {
           <path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16" />
         </svg>
         <p className="text-sm font-medium">Arrastra el comprobante aquí o haz clic para elegir</p>
-        <p className="text-xs text-ricamo-black/50">PNG o JPG, hasta 8MB</p>
+        <p className="text-xs text-ricamo-black/50">Foto o captura de pantalla (PNG o JPG)</p>
         <input
           ref={inputRef}
           id={inputId}
@@ -66,7 +72,13 @@ export function PaymentProofDropzone({ name }: { name: string }) {
           type="file"
           accept="image/*"
           required
-          onChange={(e) => updatePreview(e.target.files)}
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              void handleFiles(e.target, e.target.files);
+            } else {
+              updatePreview(null);
+            }
+          }}
           className="sr-only"
         />
       </label>

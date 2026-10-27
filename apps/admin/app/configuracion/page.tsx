@@ -6,6 +6,7 @@ import {
   actualizarEmailAlertas,
   actualizarProveedoresProduccion,
   actualizarPagoTransferencia,
+  actualizarPrecioPresentacion,
 } from "./actions";
 
 // Datos en vivo del negocio: nunca prerenderizar de forma estatica.
@@ -26,6 +27,24 @@ const PRINT_SIZE_LABELS: Record<PrintSize, string> = {
   tabloide: "Tabloide",
 };
 
+type GarmentPresentation =
+  | "estampado_camiseta_regular"
+  | "estampado_camiseta_oversize"
+  | "estampado_buzo_cuello_redondo"
+  | "estampado_buzo_capucha";
+
+interface GarmentPresentationPriceRow {
+  presentation: GarmentPresentation;
+  cost_cop: number | null;
+}
+
+const GARMENT_PRESENTATION_LABELS: Record<GarmentPresentation, string> = {
+  estampado_camiseta_regular: "Camiseta Regular",
+  estampado_camiseta_oversize: "Camiseta Oversize",
+  estampado_buzo_cuello_redondo: "Buzo Cuello Redondo",
+  estampado_buzo_capucha: "Buzo Capucha",
+};
+
 export default async function ConfiguracionPage({
   searchParams,
 }: {
@@ -38,6 +57,7 @@ export default async function ConfiguracionPage({
     { data, error: fetchError },
     { data: settingsData },
     { data: suppliersData },
+    { data: presentationPricesData, error: presentationPricesError },
   ] = await Promise.all([
     supabase
       .from("print_size_prices")
@@ -54,6 +74,10 @@ export default async function ConfiguracionPage({
         "payment_bank_account_info",
       ]),
     supabase.from("suppliers").select("id, name").order("name", { ascending: true }),
+    supabase
+      .from("garment_presentation_prices")
+      .select("presentation, cost_cop")
+      .order("presentation", { ascending: true }),
   ]);
 
   const prices = (data ?? []) as unknown as PrintSizePriceRow[];
@@ -64,6 +88,7 @@ export default async function ConfiguracionPage({
   const paymentQrImageUrl = settings.get("payment_qr_image_url") ?? "";
   const paymentBankAccountInfo = settings.get("payment_bank_account_info") ?? "";
   const suppliers = (suppliersData ?? []) as unknown as { id: string; name: string }[];
+  const presentationPrices = (presentationPricesData ?? []) as unknown as GarmentPresentationPriceRow[];
 
   return (
     <main className="px-6 py-10 max-w-2xl">
@@ -224,6 +249,66 @@ export default async function ConfiguracionPage({
             Guardar
           </button>
         </form>
+      </div>
+
+      <div className="rounded-xl border border-neutral-200 bg-white p-6 mb-8">
+        <h2 className="text-lg font-semibold mb-1">Precios de prenda — estampado</h2>
+        <p className="text-sm text-neutral-500 mb-4">
+          Precio fijo de cada presentación en estampado — se usa directo al
+          crear un listado de catálogo desde un diseño (
+          <code>/disenos/[id]/catalogo</code>). En bordado el precio varía
+          por diseño y se escribe a mano ahí, no aquí.
+        </p>
+
+        {presentationPricesError && (
+          <p className="text-sm text-ricamo-red mb-4">
+            Error cargando los precios: {presentationPricesError.message}
+          </p>
+        )}
+
+        <div className="rounded-xl border border-neutral-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                <th className="px-4 py-3 font-medium">Presentación</th>
+                <th className="px-4 py-3 font-medium">Precio actual</th>
+                <th className="px-4 py-3 font-medium">Actualizar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {presentationPrices.map((p) => (
+                <tr key={p.presentation} className="border-b border-neutral-100 last:border-0">
+                  <td className="px-4 py-3 font-medium">
+                    {GARMENT_PRESENTATION_LABELS[p.presentation] ?? p.presentation}
+                  </td>
+                  <td className="px-4 py-3 text-neutral-600">
+                    {p.cost_cop !== null ? currencyFormatter.format(p.cost_cop) : "Sin definir"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <form action={actualizarPrecioPresentacion} className="flex items-center gap-2">
+                      <input type="hidden" name="presentation" value={p.presentation} />
+                      <input
+                        name="cost_cop"
+                        type="number"
+                        min={0}
+                        step={1}
+                        defaultValue={p.cost_cop ?? ""}
+                        placeholder="COP"
+                        className="w-28 rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
+                      />
+                      <button
+                        type="submit"
+                        className="text-xs font-semibold text-ricamo-black bg-ricamo-yellow rounded-lg px-3 py-1.5 whitespace-nowrap"
+                      >
+                        Guardar
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <h2 className="text-lg font-semibold mb-1">Costos de estampado</h2>

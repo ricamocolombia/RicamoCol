@@ -75,6 +75,7 @@ const FORWARD_ACTION: Partial<
 };
 
 const dateFormatter = new Intl.DateTimeFormat("es-CO", {
+  timeZone: "America/Bogota",
   dateStyle: "medium",
   timeStyle: "short",
 });

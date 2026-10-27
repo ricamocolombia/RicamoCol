@@ -855,6 +855,31 @@ export interface Database {
         >;
         Relationships: [];
       };
+
+      garment_presentation_prices: {
+        Row: {
+          presentation:
+            | "estampado_camiseta_regular"
+            | "estampado_camiseta_oversize"
+            | "estampado_buzo_cuello_redondo"
+            | "estampado_buzo_capucha";
+          cost_cop: number | null;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          presentation:
+            | "estampado_camiseta_regular"
+            | "estampado_camiseta_oversize"
+            | "estampado_buzo_cuello_redondo"
+            | "estampado_buzo_capucha";
+          cost_cop?: number | null;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["garment_presentation_prices"]["Insert"]
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

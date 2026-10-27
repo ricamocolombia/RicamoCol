@@ -143,7 +143,7 @@ export default async function NuevaCuentaPorPagarPage({
                 const supplier = suppliersById.get(purchase.supplier_id);
                 return (
                   <option key={purchase.id} value={purchase.id}>
-                    {new Date(purchase.created_at).toLocaleDateString("es-CO")} —{" "}
+                    {new Date(purchase.created_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })} —{" "}
                     {supplier?.name ?? "Sin proveedor"} —{" "}
                     {currencyFormatter.format(purchase.total_cop)}
                   </option>

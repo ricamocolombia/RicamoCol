@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
 import { buildWhatsAppLink } from "../../lib/whatsapp";
+import { findOrCreateCustomer } from "../../lib/customers";
 
 const VALID_TECHNIQUES = ["bordado", "estampado"] as const;
 type Technique = (typeof VALID_TECHNIQUES)[number];
@@ -55,31 +56,10 @@ export async function crearSolicitud(formData: FormData) {
 
   const supabase = createServiceRoleClient();
 
-  // Cliente: busca por telefono, o crea uno nuevo.
-  const { data: existingCustomer } = await supabase
-    .from("customers")
-    .select("id")
-    .eq("phone", phone)
-    .maybeSingle();
-
-  let customerId = existingCustomer?.id ?? null;
-
+  // Cliente: busca por telefono (normalizado), o crea uno nuevo.
+  const customerId = await findOrCreateCustomer(supabase, { name, phone, email, city });
   if (!customerId) {
-    const { data: newCustomer, error: customerError } = await supabase
-      .from("customers")
-      .insert({
-        full_name: name,
-        phone,
-        email: email || null,
-        city: city || null,
-      })
-      .select("id")
-      .single();
-
-    if (customerError || !newCustomer) {
-      fail("No pudimos guardar tus datos, intenta de nuevo");
-    }
-    customerId = newCustomer.id;
+    fail("No pudimos guardar tus datos, intenta de nuevo");
   }
 
   const { error: requestError } = await supabase.from("design_requests").insert({

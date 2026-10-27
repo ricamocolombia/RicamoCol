@@ -72,10 +72,12 @@ export const currencyFormatter = new Intl.NumberFormat("es-CO", {
 });
 
 export const dateFormatter = new Intl.DateTimeFormat("es-CO", {
+  timeZone: "America/Bogota",
   dateStyle: "medium",
 });
 
 export const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
+  timeZone: "America/Bogota",
   dateStyle: "medium",
   timeStyle: "short",
 });

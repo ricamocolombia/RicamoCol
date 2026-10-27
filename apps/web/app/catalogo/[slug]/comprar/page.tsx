@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@ricamo/supabase/server";
 import { currencyFormatter, GARMENT_LABELS, TECHNIQUE_LABELS } from "../../../../lib/format";
 import { PaymentProofDropzone } from "../../../../components/PaymentProofDropzone";
+import { QuantityTotal } from "../../../../components/QuantityTotal";
 import { crearPedidoConComprobante } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -104,7 +105,10 @@ export default async function ComprarPage({
               {GARMENT_LABELS[product.garment_type] ?? product.garment_type} · Talla {variant.size}
             </p>
           </div>
-          <p className="font-bold text-lg">{currencyFormatter.format(variant.price_cop)}</p>
+          <p className="text-right">
+            <span className="font-bold text-lg">{currencyFormatter.format(variant.price_cop)}</span>
+            <span className="block text-xs text-ricamo-black/50">por unidad</span>
+          </p>
         </div>
       </div>
 
@@ -176,19 +180,7 @@ export default async function ComprarPage({
                 className="w-full rounded-xl border border-black/15 px-4 py-2.5"
               />
             </div>
-            <div>
-              <label htmlFor="quantity" className="block text-sm font-medium mb-1">
-                Cantidad
-              </label>
-              <input
-                id="quantity"
-                name="quantity"
-                type="number"
-                min={1}
-                defaultValue={1}
-                className="w-full rounded-xl border border-black/15 px-4 py-2.5"
-              />
-            </div>
+            <QuantityTotal unitPriceCop={variant.price_cop} max={20} />
           </div>
         </div>
 

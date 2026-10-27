@@ -96,7 +96,7 @@ function countFormatter(n: number) {
 }
 
 function shortDate(d: Date) {
-  return new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" }).format(d);
+  return new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", day: "numeric", month: "short" }).format(d);
 }
 
 // Arma los baldes de la tendencia de ventas: diario si el rango cabe en 45
@@ -171,8 +171,10 @@ export default async function DashboardPage({
 
   // Filtro de periodo (opcional, via ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD).
   // Sin filtro se muestra todo el historico.
-  const desdeDate = desde ? new Date(`${desde}T00:00:00`) : null;
-  const hastaDate = hasta ? new Date(`${hasta}T23:59:59`) : null;
+  // Los dias se cortan en hora de Colombia (UTC-5), no en la del servidor
+  // (Vercel corre en UTC: una venta de las 8pm caia en el dia siguiente).
+  const desdeDate = desde ? new Date(`${desde}T00:00:00-05:00`) : null;
+  const hastaDate = hasta ? new Date(`${hasta}T23:59:59.999-05:00`) : null;
   const inRange = (isoDate: string) => {
     const d = new Date(isoDate);
     if (desdeDate && d < desdeDate) return false;
@@ -180,7 +182,10 @@ export default async function DashboardPage({
     return true;
   };
 
-  const orders = allOrders.filter((o) => inRange(o.created_at));
+  // Los pedidos cancelados solo cuentan en "pedidos por estado": no son
+  // ventas, no deben inflar ventas, ticket promedio, margen ni rankings.
+  const ordersInRange = allOrders.filter((o) => inRange(o.created_at));
+  const orders = ordersInRange.filter((o) => o.status !== "cancelado");
   const orderIds = new Set(orders.map((o) => o.id));
   const items = allItems.filter((i) => orderIds.has(i.order_id));
   const transactions = allTransactions.filter((t) => inRange(t.occurred_at));
@@ -243,7 +248,7 @@ export default async function DashboardPage({
 
   // Operacion
   const pedidosPorEstado = new Map<string, number>();
-  for (const order of orders) {
+  for (const order of ordersInRange) {
     pedidosPorEstado.set(order.status, (pedidosPorEstado.get(order.status) ?? 0) + 1);
   }
   const estadoRows = [...pedidosPorEstado.entries()]

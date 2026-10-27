@@ -115,6 +115,28 @@ export async function aprobarComprobante(formData: FormData) {
     fail(id, "Este pedido ya no tiene un comprobante pendiente de validar");
   }
 
+  // Primero se "reclama" el pedido con un update condicional: si dos
+  // pestanas (o un doble clic) aprueban a la vez, solo una encuentra el
+  // pedido todavia en comprobante_pendiente -- la otra no registra nada, asi
+  // el ingreso nunca queda duplicado en Bancos.
+  const pending = order.total_cop - amountReceived;
+  const nextStatus = order.status === "pendiente" ? "confirmado" : order.status;
+  const nextPaymentStatus = pending > 0 ? "anticipo_pagado" : "pagado";
+
+  const { data: claimed, error: updateError } = await supabase
+    .from("orders")
+    .update({ payment_status: nextPaymentStatus, status: nextStatus })
+    .eq("id", id)
+    .eq("payment_status", "comprobante_pendiente")
+    .select("id");
+
+  if (updateError) {
+    fail(id, "No se pudo actualizar el pedido: " + updateError.message);
+  }
+  if (!claimed || claimed.length === 0) {
+    fail(id, "Este comprobante ya fue validado o rechazado (¿se envió dos veces?)");
+  }
+
   const { error: transactionError } = await supabase.from("transactions").insert({
     bank_account_id: bankAccountId,
     type: "ingreso",
@@ -125,10 +147,14 @@ export async function aprobarComprobante(formData: FormData) {
   });
 
   if (transactionError) {
+    // Devuelve el pedido a pendiente de validar para poder reintentar.
+    await supabase
+      .from("orders")
+      .update({ payment_status: "comprobante_pendiente", status: order.status })
+      .eq("id", id);
     fail(id, "No se pudo registrar el pago en Bancos: " + transactionError.message);
   }
 
-  const pending = order.total_cop - amountReceived;
   if (pending > 0 && order.customer_id) {
     const { error: receivableError } = await supabase.from("accounts_receivable").insert({
       customer_id: order.customer_id,
@@ -143,17 +169,6 @@ export async function aprobarComprobante(formData: FormData) {
           receivableError.message
       );
     }
-  }
-
-  const nextStatus = order.status === "pendiente" ? "confirmado" : order.status;
-
-  const { error: updateError } = await supabase
-    .from("orders")
-    .update({ payment_status: "pagado", status: nextStatus })
-    .eq("id", id);
-
-  if (updateError) {
-    fail(id, "El pago se registró pero no se pudo actualizar el pedido: " + updateError.message);
   }
 
   if (nextStatus !== order.status) {
@@ -178,13 +193,21 @@ export async function rechazarComprobante(formData: FormData) {
   const noteLine = `Comprobante rechazado${rejectionReason ? `: ${rejectionReason}` : ""}`;
   const notes = [order?.notes, noteLine].filter(Boolean).join("\n");
 
-  const { error } = await supabase
+  // Condicional: desde una pestana vieja no se puede "rechazar" un
+  // comprobante que ya se aprobo (dejaria el pedido sin pagar con el
+  // ingreso ya registrado en Bancos).
+  const { data: rejected, error } = await supabase
     .from("orders")
     .update({ payment_status: "pendiente", notes })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("payment_status", "comprobante_pendiente")
+    .select("id");
 
   if (error) {
     fail(id, "No se pudo rechazar el comprobante: " + error.message);
+  }
+  if (!rejected || rejected.length === 0) {
+    fail(id, "Este comprobante ya fue validado o rechazado");
   }
 
   await sendOrderStatusEmail(id, "comprobante_rechazado");
@@ -229,6 +252,19 @@ export async function actualizarVenta(formData: FormData) {
     : null;
 
   const supabase = createServiceRoleClient();
+
+  // "Comprobante por validar" solo lo pone el checkout web: volver a ponerlo
+  // a mano permitiria aprobar el mismo pago dos veces (ingreso duplicado).
+  if (paymentStatus === "comprobante_pendiente") {
+    const { data: current } = await supabase
+      .from("orders")
+      .select("payment_status")
+      .eq("id", id)
+      .maybeSingle();
+    if (current?.payment_status !== "comprobante_pendiente") {
+      failEdit(id, "Ese estado de pago solo lo asigna el checkout web");
+    }
+  }
 
   const { error } = await supabase
     .from("orders")

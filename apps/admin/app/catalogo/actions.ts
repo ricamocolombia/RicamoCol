@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@ricamo/supabase/server";
+import { syncDesignPublication, productHasSizes } from "../../lib/catalogPublication";
 
 function fail(message: string): never {
   redirect(`/catalogo?error=${encodeURIComponent(message)}`);
@@ -74,6 +75,10 @@ export async function toggleProductoPublicado(formData: FormData) {
   const supabase = createServiceRoleClient();
   const newValue = !isPublished;
 
+  if (newValue && !(await productHasSizes(supabase, id))) {
+    fail("Ese producto no tiene tallas — agrégalas desde Diseños → Gestionar catálogo antes de publicarlo");
+  }
+
   const { data: product, error: productError } = await supabase
     .from("products")
     .update({ is_published: newValue })
@@ -86,16 +91,10 @@ export async function toggleProductoPublicado(formData: FormData) {
   }
 
   if (product.design_id) {
-    const { error: designError } = await supabase
-      .from("designs")
-      .update({
-        published_to_ecommerce: newValue,
-        published_at: newValue ? new Date().toISOString() : null,
-      })
-      .eq("id", product.design_id);
+    const { error: designError } = await syncDesignPublication(supabase, product.design_id);
 
     if (designError) {
-      fail("El producto se actualizó pero no se pudo sincronizar el diseño: " + designError.message);
+      fail("El producto se actualizó pero no se pudo sincronizar el diseño: " + designError);
     }
   }
 
